@@ -21,7 +21,7 @@ def get_headers(access_token):
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
         "X-Restli-Protocol-Version": "2.0.0",
-        "LinkedIn-Version": "202411",
+        "LinkedIn-Version": "202601",
     }
 
 def main():
