@@ -1056,22 +1056,39 @@ with tab_analytics:
             with st.container(border=True):
                 cs1, cs2 = st.columns([1, 5])
                 with cs1:
-                    # Fix: Added unique key to prevent conflicts
-                    if st.button("✨ Generate", type="primary", use_container_width=True, key="btn_generate_strategy"):
-                        with st.spinner("Analyzing trends..."):
-                            import linkedin_planner
-                            from importlib import reload
-                            reload(linkedin_planner)
-                            linkedin_planner.main()
-                            st.rerun()
+                    if st.button("✨ Auto-Generate", type="primary", use_container_width=True, key="btn_autopilot"):
+                        with st.spinner("Analyzing trends & drafting new content..."):
+                            try:
+                                # Inject secrets for planner
+                                my_env = os.environ.copy()
+                                if hasattr(st, "secrets"):
+                                    for key, value in st.secrets.items():
+                                        my_env[str(key)] = str(value)
+                                
+                                # Run the planner script
+                                res = subprocess.run(
+                                    ["python3", "linkedin_planner.py"], 
+                                    capture_output=True, text=True,
+                                    env=my_env
+                                )
+                                
+                                if res.returncode == 0:
+                                    st.success("Strategy generated! Check the new drafts in 'Pending'.")
+                                    time.sleep(2)
+                                    st.rerun()
+                                else:
+                                    st.error(f"Failed: {res.stderr or res.stdout}")
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+
                 with cs2:
                     st.markdown("""
                     <div style="color: #64748b; font-size: 0.85rem; padding-top: 6px;">
-                        Analyze your top-performing content to generate actionable strategy & remix ideas.
+                        Analyze top-performing content (views/likes) and automatically write 3 new drafts based on winning themes.
                     </div>
                     """, unsafe_allow_html=True)
             
-            plan_file = Path("linkedin_posts/plan.md")
+            plan_file = POSTS_DIR / "plan.md"
             if plan_file.exists():
                 with st.expander("📄 View Strategy Report", expanded=False):
                     st.markdown(plan_file.read_text(encoding="utf-8"))

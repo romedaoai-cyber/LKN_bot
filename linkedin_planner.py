@@ -1,99 +1,109 @@
-import json
+
 import os
-import sys
+import json
+import random
 from pathlib import Path
 from datetime import datetime
+import google.generativeai as genai
 
 # Configuration
-ANALYTICS_FILE = Path("linkedin_analytics_data.json")
-PLAN_FILE = Path("linkedin_posts/plan.md")
+BASE_DIR = Path(__file__).parent
+POSTS_DIR = BASE_DIR / "linkedin_posts"
+ANALYTICS_FILE = BASE_DIR / "linkedin_analytics_data.json"
+PLAN_FILE = POSTS_DIR / "plan.md"
 
-def main():
-    print("🧠 Starting Content Planner...")
-    
-    # 1. Load Analytics
+def load_analytics():
     if not ANALYTICS_FILE.exists():
-        print("⚠️ No analytics data found. Run 'python linkedin_analytics.py' first.")
-        # Create dummy plan
-        try:
-            PLAN_FILE.parent.mkdir(parents=True, exist_ok=True)
-            PLAN_FILE.write_text("# Auto-Generated Content Plan\n\nNo data yet. Waiting for posts stats.", encoding="utf-8")
-        except Exception as e:
-            print(f"Error writing plan: {e}")
-        return
-
+        return []
     try:
-        with open(ANALYTICS_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception as e:
-        print(f"Error reading analytics: {e}")
-        return
-    
+        return json.loads(ANALYTICS_FILE.read_text(encoding="utf-8"))
+    except:
+        return []
+
+def get_top_performing_topics(data):
+    """Analyze high-performing posts to extract topics/themes."""
     if not data:
-        print("⚠️ Analytics data is empty.")
-        return
+        return ["General Industry Trends", "AOI Technology", "Manufacturing Efficiency"]
+    
+    # Sort by engagement (likes + comments)
+    sorted_data = sorted(data, key=lambda x: x.get("likes", 0) + x.get("comments", 0), reverse=True)
+    top_posts = sorted_data[:5]
+    
+    # In a real scenario, we'd use LLM to extract themes, but here we'll use titles
+    topics = [p.get("filename", "").replace(".md", "").replace("_", " ") for p in top_posts]
+    return topics
 
-    # 2. Analyze Top Performers
-    # Sort by engagement rate (if impressions exist) or likes
-    def get_score(p):
-        likes = p.get("likes", 0)
-        comments = p.get("comments", 0)
-        impressions = p.get("impressions", 0)
+def generate_strategic_plan():
+    """Generate a content plan and draft new posts."""
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        return "❌ Missing GEMINI_API_KEY"
+
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-2.0-flash")
+
+    data = load_analytics()
+    top_topics = get_top_performing_topics(data)
+    
+    # 1. Strategy Generation
+    strategy_prompt = f"""
+    You are a LinkedIn Content Strategist for DaoAI (AOI machines for PCBA).
+    
+    Based on our top-performing past posts:
+    {json.dumps(top_topics[:5], indent=2)}
+    
+    1. Identify the WINNING THEME (why did these work?)
+    2. Suggest 3 NEW ANGLES or "Remixes" to double down on this success.
+    3. Write 3 NEW LinkedIn posts (Drafts) based on these angles.
+    
+    Output Format:
+    # Strategy Report
+    (Analysis...)
+
+    # New Drafts
+    
+    ## Draft 1: [Title]
+    (Content...)
+    
+    ## Draft 2: [Title]
+    (Content...)
+    
+    ## Draft 3: [Title]
+    (Content...)
+    """
+    
+    response = model.generate_content(strategy_prompt)
+    plan_content = response.text
+    
+    # Save the plan
+    PLAN_FILE.write_text(plan_content, encoding="utf-8")
+    
+    # 2. Extract and Save Drafts (Simple parsing)
+    # We'll just save the whole plan for now, but in a full "Autopilot", we'd parse and save individual .md files.
+    # Let's do a simple parse to save individual drafts to populate the dashboard.
+    
+    drafts = plan_content.split("## Draft")
+    created_count = 0
+    
+    for i, draft in enumerate(drafts[1:], 1):
+        lines = draft.strip().split("\n")
+        title = lines[0].strip().replace(":", "").strip()
+        body = "\n".join(lines[1:]).strip()
         
-        interactions = likes + comments
-        if impressions > 0:
-            return interactions / impressions
-        return interactions
+        filename = f"auto_draft_{datetime.now().strftime('%Y%m%d')}_{i}.md"
+        filepath = POSTS_DIR / filename
+        
+        file_content = f"""<!-- date: {datetime.now().strftime('%Y-%m-%d')} -->
+<!-- status: pending -->
+<!-- subject: {title} -->
+<!-- image: -->
 
-    top_posts = sorted(data, key=get_score, reverse=True)
-    top_3 = top_posts[:3]
-    
-    print(f"📊 Analyzed {len(data)} posts. Top 3:")
-    for p in top_3:
-        likes = p.get("likes", 0)
-        impressions = p.get("impressions", 0)
-        print(f"   - {p['name']} ({likes} likes, {impressions} views)")
-
-    # 3. Generate Plan
-    current_date = datetime.now().strftime("%Y-%m-%d")
-    
-    plan_content = f"""# 🧠 AI-Generated Content Plan ({current_date})
-
-Based on your top performing content (Analyzed {len(data)} posts), here is your strategy:
-
-## 🏆 Top Performing Content
+{body}
 """
-    for p in top_3:
-        title = p.get('name', 'Untitled')
-        likes = p.get('likes', 0)
-        comments = p.get('comments', 0)
-        impressions = p.get('impressions', 0)
-        clicks = p.get('clicks', 0)
+        filepath.write_text(file_content, encoding="utf-8")
+        created_count += 1
         
-        er = 0
-        if impressions > 0:
-            er = ((likes + comments) / impressions) * 100
-            
-        plan_content += f"### {title}\n"
-        plan_content += f"- **Stats**: {likes} Likes, {comments} Comments, {impressions} Views\n"
-        plan_content += f"- **Engagement Rate**: {er:.2f}%\n"
-        plan_content += f"- **Clicks**: {clicks}\n\n"
-
-    plan_content += "\n## 💡 Next Steps / Suggestions\n\n"
-    
-    for i, p in enumerate(top_3, 1):
-        title = p.get('name', 'Untitled')
-        plan_content += f"### Idea {i}: Expand on '{title}'\n"
-        plan_content += f"**Concept**: The audience engaged well with this topic. Create a deep-dive or a follow-up post focusing on a specific detail mentioned in '{title}'.\n"
-        plan_content += f"**Format**: Carousel (PDF) or Short Video for higher engagement.\n\n"
-
-    try:
-        PLAN_FILE.parent.mkdir(parents=True, exist_ok=True)
-        PLAN_FILE.write_text(plan_content, encoding="utf-8")
-        print(f"\n✅ Plan generated successfully: {PLAN_FILE}")
-        print("   Open Dashboard -> Analytics tab to view.")
-    except Exception as e:
-        print(f"Error saving plan: {e}")
+    return f"✅ Generated Strategy Plan & {created_count} New Drafts based on data!"
 
 if __name__ == "__main__":
-    main()
+    print(generate_strategic_plan())
