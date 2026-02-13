@@ -30,6 +30,7 @@ def load_env():
     return env
 
 
+def get_headers(access_token):
     return {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
