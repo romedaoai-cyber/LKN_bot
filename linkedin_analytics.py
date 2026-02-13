@@ -150,12 +150,17 @@ def save_analytics(data):
 
 
 def main():
-    env = load_env()
-    access_token = env.get("LINKEDIN_ACCESS_TOKEN")
-    org_id = env.get("LINKEDIN_ORG_ID")
+    # Check os.environ FIRST (injected by Streamlit Cloud), then .env file
+    access_token = os.environ.get("LINKEDIN_ACCESS_TOKEN")
+    org_id = os.environ.get("LINKEDIN_ORG_ID")
+    
+    if not access_token:
+        env = load_env()
+        access_token = env.get("LINKEDIN_ACCESS_TOKEN")
+        org_id = org_id or env.get("LINKEDIN_ORG_ID")
 
     if not access_token:
-        print("❌ No access token found. Run 'python linkedin_publisher.py auth' first.")
+        print("❌ No access token found. Set LINKEDIN_ACCESS_TOKEN in secrets or .env.")
         return
 
     print("🔍 Scanning for published posts...")
