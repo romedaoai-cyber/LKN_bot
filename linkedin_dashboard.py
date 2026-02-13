@@ -778,6 +778,14 @@ def render_post_card(post, prefix=""):
                     if st.button("Submit", key=f"sub_{k}"):
                         update_post_metadata(post["file"], status="rejected", feedback=fb)
                         log_feedback(post["filename"], fb, "rejected")
+                        
+                        # Trigger AI immediately (for Streamlit Cloud)
+                        with st.spinner("🤖 AI is revising based on your feedback..."):
+                            import linkedin_feedback_agent as agent
+                            agent.process_feedback()
+                        
+                        st.success("Revision complete!")
+                        time.sleep(1)
                         st.rerun()
 
             if post.get("feedback"):
