@@ -904,24 +904,36 @@ with tab_analytics:
     with h_col1:
         st.markdown('<div class="section-title">📈 Channel Performance</div>', unsafe_allow_html=True)
     with h_col2:
-        if st.button("🔄 Sync Data", use_container_width=True):
-            with st.spinner("Fetching latest stats..."):
+        if st.button("🔄 Sync Data (Debug Mode)", use_container_width=True):
+            with st.spinner("Fetching (Debug Mode)..."):
                 try:
-                    # Inject secrets into os.environ DIRECTLY (no subprocess)
+                    # Inject secrets
                     if hasattr(st, "secrets"):
                         for key, value in st.secrets.items():
                             os.environ[str(key)] = str(value)
+                    
+                    # Capture stdout to show on UI
+                    import io
+                    import sys
+                    captured_output = io.StringIO()
+                    sys.stdout = captured_output
                     
                     import linkedin_analytics
                     import importlib
                     importlib.reload(linkedin_analytics)
                     linkedin_analytics.main()
                     
-                    st.success("Data updated!")
-                    time.sleep(1)
+                    # Restore stdout
+                    sys.stdout = sys.__stdout__
+                    debug_log = captured_output.getvalue()
+                    
+                    st.success("Sync Finished!")
+                    st.expander("🔍 Show Debug Logs", expanded=True).code(debug_log)
+                    
+                    time.sleep(5)
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Failed: {e}\n\nDetails: Check that LINKEDIN_ACCESS_TOKEN is set in Secrets.")
+                    st.error(f"Failed: {e}")
 
     # Load Data
     analytics_file = Path("linkedin_analytics_data.json")
