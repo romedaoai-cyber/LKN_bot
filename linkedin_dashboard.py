@@ -904,6 +904,31 @@ with tab_analytics:
     with h_col1:
         st.markdown('<div class="section-title">📈 Channel Performance</div>', unsafe_allow_html=True)
     with h_col2:
+        if st.button("🔍 Check Access & Org Name", use_container_width=True):
+            with st.spinner("Checking permissions..."):
+                try:
+                    if hasattr(st, "secrets"):
+                        for key, value in st.secrets.items():
+                            os.environ[str(key)] = str(value)
+                    
+                    import io
+                    import sys
+                    captured_output = io.StringIO()
+                    sys.stdout = captured_output
+                    
+                    import check_linkedin_access
+                    import importlib
+                    importlib.reload(check_linkedin_access)
+                    check_linkedin_access.main()
+                    
+                    sys.stdout = sys.__stdout__
+                    debug_log = captured_output.getvalue()
+                    
+                    st.info("LinkedIn Access Report")
+                    st.code(debug_log)
+                except Exception as e:
+                    st.error(f"Failed: {e}")
+
         if st.button("🔄 Sync Data (Debug Mode)", use_container_width=True):
             with st.spinner("Fetching (Debug Mode)..."):
                 try:
