@@ -907,18 +907,21 @@ with tab_analytics:
         if st.button("🔄 Sync Data", use_container_width=True):
             with st.spinner("Fetching latest stats..."):
                 try:
-                    # Inject secrets for subprocess
-                    my_env = os.environ.copy()
+                    # Inject secrets into os.environ DIRECTLY (no subprocess)
                     if hasattr(st, "secrets"):
                         for key, value in st.secrets.items():
-                            my_env[str(key)] = str(value)
-
-                    subprocess.run(["python3", "linkedin_analytics.py"], check=True, env=my_env)
+                            os.environ[str(key)] = str(value)
+                    
+                    import linkedin_analytics
+                    import importlib
+                    importlib.reload(linkedin_analytics)
+                    linkedin_analytics.main()
+                    
                     st.success("Data updated!")
                     time.sleep(1)
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Failed: {e}")
+                    st.error(f"Failed: {e}\n\nDetails: Check that LINKEDIN_ACCESS_TOKEN is set in Secrets.")
 
     # Load Data
     analytics_file = Path("linkedin_analytics_data.json")
@@ -1059,25 +1062,22 @@ with tab_analytics:
                     if st.button("✨ Auto-Generate", type="primary", use_container_width=True, key="btn_autopilot"):
                         with st.spinner("Analyzing trends & drafting new content..."):
                             try:
-                                # Inject secrets for planner
-                                my_env = os.environ.copy()
+                                # Inject secrets directly
                                 if hasattr(st, "secrets"):
                                     for key, value in st.secrets.items():
-                                        my_env[str(key)] = str(value)
+                                        os.environ[str(key)] = str(value)
                                 
-                                # Run the planner script
-                                res = subprocess.run(
-                                    ["python3", "linkedin_planner.py"], 
-                                    capture_output=True, text=True,
-                                    env=my_env
-                                )
+                                import linkedin_planner
+                                import importlib
+                                importlib.reload(linkedin_planner)
+                                result = linkedin_planner.generate_strategic_plan()
                                 
-                                if res.returncode == 0:
-                                    st.success("Strategy generated! Check the new drafts in 'Pending'.")
+                                if result and result.startswith("✅"):
+                                    st.success(result)
                                     time.sleep(2)
                                     st.rerun()
                                 else:
-                                    st.error(f"Failed: {res.stderr or res.stdout}")
+                                    st.error(f"Failed: {result}")
                             except Exception as e:
                                 st.error(f"Error: {e}")
 
