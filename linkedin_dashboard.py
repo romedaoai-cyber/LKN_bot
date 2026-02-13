@@ -781,12 +781,23 @@ def render_post_card(post, prefix=""):
                         
                         # Trigger AI immediately (for Streamlit Cloud)
                         with st.spinner("🤖 AI is revising based on your feedback..."):
+                            # Ensure secrets are available as env vars for the agent
+                            if hasattr(st, "secrets"):
+                                for key, value in st.secrets.items():
+                                    os.environ[str(key)] = str(value)
+                            
                             import linkedin_feedback_agent as agent
-                            agent.process_feedback()
-                        
-                        st.success("Revision complete!")
-                        time.sleep(1)
-                        st.rerun()
+                            import importlib
+                            importlib.reload(agent)  # Reload to pick up new env vars
+                            
+                            processed_count = agent.process_feedback()
+                            
+                            if processed_count > 0:
+                                st.success("Revision complete!")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error("AI revision process started but no posts were modified. Check logs.")
 
             if post.get("feedback"):
                 st.info(f"💡 {post['feedback']}")
