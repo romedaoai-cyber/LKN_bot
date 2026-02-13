@@ -35,7 +35,7 @@ def get_headers(access_token):
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
         "X-Restli-Protocol-Version": "2.0.0",
-        "LinkedIn-Version": "202410",
+        "LinkedIn-Version": "202406",
     }
 
 
@@ -86,16 +86,65 @@ def fetch_org_posts(org_urn, headers):
                 })
             
             print(f"✅ Found {len(posts)} posts from organization")
-        elif resp.status_code == 403:
-            print(f"⚠️ Permission denied. Trying UGC Posts API fallback...")
+        elif resp.status_code == 403 or resp.status_code == 426:
+            print(f"⚠️ Primary API failed ({resp.status_code}). Trying UGC fallback...")
             posts = fetch_org_posts_ugc(org_urn, headers)
+            if not posts:
+                print(f"⚠️ UGC fallback empty/failed. Trying Shares fallback...")
+                posts = fetch_org_posts_shares(org_urn, headers)
         else:
             print(f"⚠️ Failed to fetch org posts: {resp.status_code}")
             print(f"   Response: {resp.text[:300]}")
-            # Try UGC fallback
+            # Try fallbacks
             posts = fetch_org_posts_ugc(org_urn, headers)
+            if not posts:
+                posts = fetch_org_posts_shares(org_urn, headers)
     except Exception as e:
         print(f"❌ Error fetching org posts: {e}")
+    
+    return posts
+
+
+def fetch_org_posts_shares(org_urn, headers):
+    """Fallback 2: Use Shares API to fetch org posts."""
+    posts = []
+    
+    # Shares API uses 'owners' param
+    url = f"https://api.linkedin.com/v2/shares?q=owners&owners=List({quote(org_urn)})&count=50&sharesPerOwner=50"
+    
+    try:
+        resp = requests.get(url, headers=headers)
+        print(f"📡 Shares fallback... Status: {resp.status_code}")
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            elements = data.get("elements", [])
+            
+            for el in elements:
+                post_id = el.get("id", "")
+                content = el.get("text", {}) .get("text", "")
+                created_at = el.get("created", {}).get("time", 0)
+                
+                title = content[:80].replace("\n", " ").strip() if content else "Untitled"
+                if len(content) > 80:
+                    title += "..."
+                
+                created_date = ""
+                if created_at:
+                    created_date = datetime.fromtimestamp(created_at / 1000).strftime("%Y-%m-%d")
+                
+                posts.append({
+                    "urn": post_id,
+                    "name": title,
+                    "date": created_date,
+                    "content_preview": content[:200] if content else "",
+                })
+            
+            print(f"✅ Found {len(posts)} posts via Shares API")
+        else:
+            print(f"⚠️ Shares fallback failed: {resp.status_code} {resp.text[:200]}")
+    except Exception as e:
+        print(f"❌ Error in Shares fallback: {e}")
     
     return posts
 
