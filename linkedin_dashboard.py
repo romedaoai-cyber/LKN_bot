@@ -907,7 +907,13 @@ with tab_analytics:
         if st.button("🔄 Sync Data", use_container_width=True):
             with st.spinner("Fetching latest stats..."):
                 try:
-                    subprocess.run(["python3", "linkedin_analytics.py"], check=True)
+                    # Inject secrets for subprocess
+                    my_env = os.environ.copy()
+                    if hasattr(st, "secrets"):
+                        for key, value in st.secrets.items():
+                            my_env[str(key)] = str(value)
+
+                    subprocess.run(["python3", "linkedin_analytics.py"], check=True, env=my_env)
                     st.success("Data updated!")
                     time.sleep(1)
                     st.rerun()
