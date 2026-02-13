@@ -1,0 +1,24 @@
+# Secrets & credentials
+.env
+.env.*
+!.env.example
+serviceAccountKey.json
+*.pid
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temp data
+temp_urns.json
+task_results.json
+linkedin_analytics_data.json

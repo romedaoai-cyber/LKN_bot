@@ -1,0 +1,6 @@
+streamlit
+firebase-admin
+pandas
+requests
+python-dotenv
+google-generativeai
