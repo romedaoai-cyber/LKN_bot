@@ -374,23 +374,27 @@ def load_posts():
     # 2. Get Cloud Posts from Firebase
     cloud_posts = fm.get_all_posts() if fm.is_active() else []
     
-    # 3. Merge: prefer items in Cloud, then Local
+    # 3. Merge: LOCAL file is always the source of truth for content
     merged = {}
     
     # First, fill with local
     for p in local_posts:
         merged[p["filename"]] = p
         
-    # Then, override with cloud
+    # Then, supplement with cloud metadata (but NEVER overwrite local text/status)
     for cp in cloud_posts:
         fname = cp.get("filename")
         if not fname: continue
         
-        # Keep the local Path object if we have it
-        if fname in merged and "file" in merged[fname]:
-            cp["file"] = merged[fname]["file"]
-        
-        merged[fname] = cp
+        if fname in merged:
+            # Local file exists — keep local text, status, and file path
+            # Only add cloud-only fields (e.g., analytics) that local doesn't have
+            for key, val in cp.items():
+                if key not in merged[fname] or merged[fname][key] is None:
+                    merged[fname][key] = val
+        else:
+            # Cloud-only post (no local file) — use cloud data as-is
+            merged[fname] = cp
 
     return sorted(merged.values(), key=lambda x: x.get("date", "9999-99-99"))
 
