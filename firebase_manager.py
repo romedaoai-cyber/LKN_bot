@@ -40,9 +40,13 @@ class FirebaseManager:
     def get_all_posts(self):
         """Fetch all posts from 'posts' collection"""
         if not self.db: return []
-        posts_ref = self.db.collection("posts")
-        docs = posts_ref.stream()
-        return [doc.to_dict() for doc in docs]
+        try:
+            posts_ref = self.db.collection("posts")
+            docs = posts_ref.stream()
+            return [doc.to_dict() for doc in docs]
+        except Exception as e:
+            print(f"❌ Firestore Error: {e}")
+            return []
 
     def sync_post(self, post_data):
         """Save or update a post in Firestore. Uses 'filename' as document ID."""
