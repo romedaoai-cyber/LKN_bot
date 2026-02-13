@@ -30,12 +30,11 @@ def load_env():
     return env
 
 
-def get_headers(access_token):
     return {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
         "X-Restli-Protocol-Version": "2.0.0",
-        "LinkedIn-Version": "202501",
+        "LinkedIn-Version": "202411",
     }
 
 

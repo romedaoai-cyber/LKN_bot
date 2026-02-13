@@ -33,7 +33,7 @@ POSTS_DIR = Path(__file__).parent / "linkedin_posts"
 PUBLISHED_LOG = Path(__file__).parent / "linkedin_published.json"
 
 LINKEDIN_API_BASE = "https://api.linkedin.com"
-LINKEDIN_VERSION = "202501"
+LINKEDIN_VERSION = "202411"
 
 # LinkedIn OAuth endpoints
 AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization"
