@@ -779,25 +779,56 @@ def render_post_card(post, prefix=""):
                         update_post_metadata(post["file"], status="rejected", feedback=fb)
                         log_feedback(post["filename"], fb, "rejected")
                         
-                        # Trigger AI immediately (for Streamlit Cloud)
+                        # ── Call Gemini DIRECTLY (bypass agent for reliability) ──
                         with st.spinner("🤖 AI is revising based on your feedback..."):
-                            # Ensure secrets are available as env vars for the agent
-                            if hasattr(st, "secrets"):
-                                for key, value in st.secrets.items():
-                                    os.environ[str(key)] = str(value)
-                            
-                            import linkedin_feedback_agent as agent
-                            import importlib
-                            importlib.reload(agent)  # Reload to pick up new env vars
-                            
-                            processed_count = agent.process_feedback()
-                            
-                            if processed_count > 0:
-                                st.success("Revision complete!")
-                                time.sleep(1)
-                                st.rerun()
-                            else:
-                                st.error("AI revision process started but no posts were modified. Check logs.")
+                            try:
+                                import google.generativeai as genai
+                                api_key = os.environ.get("GEMINI_API_KEY", "")
+                                if hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
+                                    api_key = st.secrets["GEMINI_API_KEY"]
+                                if not api_key:
+                                    api_key = "AIzaSyBqQF9-ivsvkAjbGhb-OIvDv6dbtBmK38M"
+                                
+                                genai.configure(api_key=api_key)
+                                model = genai.GenerativeModel("gemini-2.0-flash")
+                                
+                                original_text = post.get("text", "")
+                                prompt = f"""You are a LinkedIn content writer for DaoAI, a company that makes AI-powered AOI (Automated Optical Inspection) machines for PCBA manufacturing.
+
+The user REJECTED the following LinkedIn post and provided feedback. 
+Revise the post according to their feedback. Keep the same general topic and intent.
+
+RULES:
+- Write in English only
+- Keep it professional and engaging for LinkedIn
+- Keep roughly the same length (slightly shorter is OK)
+- Do NOT include any markdown formatting — plain text only
+- STRICTLY follow the user's feedback instructions
+
+ORIGINAL POST:
+{original_text}
+
+USER FEEDBACK:
+{fb}
+
+Write ONLY the revised post text. No explanations, no headers, just the post content ready to publish."""
+
+                                response = model.generate_content(prompt)
+                                revised = response.text.strip()
+                                
+                                if len(revised) > 50:
+                                    # Write revised content back to the file
+                                    if update_post_content(post["file"], revised):
+                                        update_post_metadata(post["file"], status="pending", feedback=fb)
+                                        st.success(f"✅ AI has revised the post! ({len(revised)} chars)")
+                                        time.sleep(1)
+                                        st.rerun()
+                                    else:
+                                        st.error("Failed to save revised content.")
+                                else:
+                                    st.error(f"AI returned a response too short ({len(revised)} chars). Please try again.")
+                            except Exception as e:
+                                st.error(f"AI revision error: {e}")
 
             if post.get("feedback"):
                 st.info(f"💡 {post['feedback']}")
