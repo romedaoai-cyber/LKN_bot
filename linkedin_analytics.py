@@ -4,7 +4,7 @@ import time
 import requests
 from pathlib import Path
 from datetime import datetime
-from urllib.parse import quote, urlencode
+from urllib.parse import quote
 
 # Configuration
 POSTS_DIR = Path(__file__).parent / "linkedin_posts"
@@ -12,8 +12,10 @@ DOTENV_PATH = Path(__file__).parent / ".env"
 ANALYTICS_FILE = Path(__file__).parent / "linkedin_analytics_data.json"
 
 # LinkedIn API Endpoints
+ORG_POSTS_URL = "https://api.linkedin.com/rest/posts"
 SOCIAL_ACTIONS_URL = "https://api.linkedin.com/v2/socialActions/{share_urn}"
 ORG_STATS_URL = "https://api.linkedin.com/rest/organizationalEntityShareStatistics"
+
 
 def load_env():
     """Load environment variables from .env file."""
@@ -37,28 +39,113 @@ def get_headers(access_token):
     }
 
 
-def get_posts_with_urns():
-    """Scan posts directory for files with shareUrn."""
+def fetch_org_posts(org_urn, headers):
+    """Fetch ALL posts from the organization via LinkedIn API."""
     posts = []
-    if not POSTS_DIR.exists():
-        return posts
-
-    for f in POSTS_DIR.glob("*.md"):
-        content = f.read_text(encoding="utf-8")
-        urn = None
-        for line in content.split("\n"):
-            if line.startswith("<!-- shareUrn:"):
-                parts = line.split(":", 1)
-                if len(parts) > 1:
-                    urn = parts[1].strip().strip("-->").strip()
-                break
+    
+    # Ensure org_urn is properly formatted
+    if not org_urn.startswith("urn:li:organization:"):
+        org_urn = f"urn:li:organization:{org_urn}"
+    
+    params = {
+        "author": org_urn,
+        "q": "author",
+        "count": 50,  # Max per page
+    }
+    
+    url = ORG_POSTS_URL
+    
+    try:
+        resp = requests.get(url, headers=headers, params=params)
+        print(f"📡 Fetching org posts... Status: {resp.status_code}")
         
-        if urn:
-            posts.append({
-                "file": str(f),
-                "name": f.name,
-                "urn": urn
-            })
+        if resp.status_code == 200:
+            data = resp.json()
+            elements = data.get("elements", [])
+            
+            for el in elements:
+                post_id = el.get("id", "")
+                content = el.get("commentary", "")
+                created_at = el.get("createdAt", 0)
+                
+                # Extract a short title from the content
+                title = content[:80].replace("\n", " ").strip() if content else "Untitled"
+                if len(content) > 80:
+                    title += "..."
+                
+                # Convert timestamp to readable date
+                created_date = ""
+                if created_at:
+                    created_date = datetime.fromtimestamp(created_at / 1000).strftime("%Y-%m-%d")
+                
+                posts.append({
+                    "urn": post_id,
+                    "name": title,
+                    "date": created_date,
+                    "content_preview": content[:200] if content else "",
+                })
+            
+            print(f"✅ Found {len(posts)} posts from organization")
+        elif resp.status_code == 403:
+            print(f"⚠️ Permission denied. Trying UGC Posts API fallback...")
+            posts = fetch_org_posts_ugc(org_urn, headers)
+        else:
+            print(f"⚠️ Failed to fetch org posts: {resp.status_code}")
+            print(f"   Response: {resp.text[:300]}")
+            # Try UGC fallback
+            posts = fetch_org_posts_ugc(org_urn, headers)
+    except Exception as e:
+        print(f"❌ Error fetching org posts: {e}")
+    
+    return posts
+
+
+def fetch_org_posts_ugc(org_urn, headers):
+    """Fallback: Use UGC Posts API to fetch org posts."""
+    posts = []
+    
+    url = f"https://api.linkedin.com/v2/ugcPosts?q=authors&authors=List({quote(org_urn)})&count=50"
+    
+    try:
+        resp = requests.get(url, headers=headers)
+        print(f"📡 UGC fallback... Status: {resp.status_code}")
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            elements = data.get("elements", [])
+            
+            for el in elements:
+                post_id = el.get("id", "")
+                
+                # UGC posts have different content structure
+                specific_content = el.get("specificContent", {})
+                share_content = specific_content.get("com.linkedin.ugc.ShareContent", {})
+                share_commentary = share_content.get("shareCommentary", {})
+                content = share_commentary.get("text", "")
+                
+                created_at = el.get("created", {}).get("time", 0)
+                
+                title = content[:80].replace("\n", " ").strip() if content else "Untitled"
+                if len(content) > 80:
+                    title += "..."
+                
+                created_date = ""
+                if created_at:
+                    created_date = datetime.fromtimestamp(created_at / 1000).strftime("%Y-%m-%d")
+                
+                posts.append({
+                    "urn": post_id,
+                    "name": title,
+                    "date": created_date,
+                    "content_preview": content[:200] if content else "",
+                })
+            
+            print(f"✅ Found {len(posts)} posts via UGC API")
+        else:
+            print(f"⚠️ UGC fallback also failed: {resp.status_code} {resp.text[:200]}")
+    except Exception as e:
+        print(f"❌ Error in UGC fallback: {e}")
+    
     return posts
 
 
@@ -67,15 +154,15 @@ def fetch_social_actions(urn, headers):
     encoded_urn = quote(urn)
     url = SOCIAL_ACTIONS_URL.format(share_urn=encoded_urn)
     
-    resp = requests.get(url, headers=headers)
-    if resp.status_code == 200:
-        data = resp.json()
-        likes = data.get("likesSummary", {}).get("totalLikes", 0)
-        comments = data.get("commentsSummary", {}).get("totalFirstLevelComments", 0)
-        return likes, comments
-    
-    # If 403/404, maybe using different URN type?
-    # Some endpoints need urn:li:share, others urn:li:ugcPost
+    try:
+        resp = requests.get(url, headers=headers)
+        if resp.status_code == 200:
+            data = resp.json()
+            likes = data.get("likesSummary", {}).get("totalLikes", 0)
+            comments = data.get("commentsSummary", {}).get("totalFirstLevelComments", 0)
+            return likes, comments
+    except:
+        pass
     return 0, 0
 
 
@@ -84,73 +171,57 @@ def fetch_impressions_batch(urns, org_urn, headers):
     if not org_urn:
         return {}
 
-    # Ensure org_urn is a URN
     if not org_urn.startswith("urn:li:organization:"):
         org_urn = f"urn:li:organization:{org_urn}"
 
     stats_map = {}
-    
-    # API allows batching shares
-    # Logic: ?q=organizationalEntity&organizationalEntity={orgUrn}&shares=List(urn1,urn2)
-    
-    # Process in chunks of 20 to be safe
     chunk_size = 20
+    
     for i in range(0, len(urns), chunk_size):
         chunk = urns[i:i + chunk_size]
-        
-        # Build shares parameter: List(urn1,urn2)
         shares_param = "List(" + ",".join([quote(u) for u in chunk]) + ")"
-        
-        params = {
-            "q": "organizationalEntity",
-            "organizationalEntity": org_urn,
-            "shares": shares_param
-        }
-        
-        # Actually requests params encoding might double encode if we use requests.get(params=...) with already quoted string?
-        # Manually building query string is safer for "List(...)" syntax which is non-standard
-        
         query = f"q=organizationalEntity&organizationalEntity={quote(org_urn)}&shares={shares_param}"
         url = f"{ORG_STATS_URL}?{query}"
         
-        resp = requests.get(url, headers=headers)
-        
-        if resp.status_code == 200:
-            data = resp.json()
-            elements = data.get("elements", [])
-            for el in elements:
-                share_urn = el.get("share")
-                impressions = el.get("totalShareStatistics", {}).get("impressionCount", 0)
-                stats_map[share_urn] = impressions
-        else:
-            print(f"⚠️ Failed to fetch impressions: {resp.status_code} {resp.text}")
+        try:
+            resp = requests.get(url, headers=headers)
+            if resp.status_code == 200:
+                data = resp.json()
+                elements = data.get("elements", [])
+                for el in elements:
+                    share_urn = el.get("share")
+                    stats = el.get("totalShareStatistics", {})
+                    impressions = stats.get("impressionCount", 0)
+                    clicks = stats.get("clickCount", 0)
+                    stats_map[share_urn] = {"impressions": impressions, "clicks": clicks}
+            else:
+                print(f"⚠️ Impressions batch failed: {resp.status_code}")
+        except Exception as e:
+            print(f"⚠️ Impressions error: {e}")
 
     return stats_map
 
 
 def save_analytics(data):
     """Save analytics data to JSON and sync to Firebase."""
-    # 1. Save Local JSON
     with open(ANALYTICS_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
-    # 2. Sync to Firebase
-    from firebase_manager import fm
-    if fm.initialize():
-        print("🔥 Syncing analytics to Firebase...")
-        for row in data:
-            filename = row.get("filename")
-            if filename:
-                # Merge analytics data into the post document
-                # We use the filename as the key just like in sync_post
-                fm.db.collection("posts").document(filename).set(row, merge=True)
-        
-        # Log the sync event
-        fm.log_event("analytics", f"Synced {len(data)} post analytics", {"count": len(data)})
+    try:
+        from firebase_manager import fm
+        if fm.initialize():
+            print("🔥 Syncing analytics to Firebase...")
+            for row in data:
+                filename = row.get("filename")
+                if filename:
+                    fm.db.collection("posts").document(filename).set(row, merge=True)
+            fm.log_event("analytics", f"Synced {len(data)} post analytics", {"count": len(data)})
+    except Exception as e:
+        print(f"⚠️ Firebase sync skipped: {e}")
 
 
 def main():
-    # Check os.environ FIRST (injected by Streamlit Cloud), then .env file
+    # Check os.environ FIRST (Streamlit Cloud), then .env file
     access_token = os.environ.get("LINKEDIN_ACCESS_TOKEN")
     org_id = os.environ.get("LINKEDIN_ORG_ID")
     
@@ -163,48 +234,85 @@ def main():
         print("❌ No access token found. Set LINKEDIN_ACCESS_TOKEN in secrets or .env.")
         return
 
-    print("🔍 Scanning for published posts...")
-    posts = get_posts_with_urns()
+    headers = get_headers(access_token)
+
+    # ── Step 1: Fetch ALL posts from organization ──
+    print("🔍 Fetching all published posts from LinkedIn...")
+    org_posts = fetch_org_posts(org_id, headers) if org_id else []
     
-    if not posts:
-        print("📭 No published posts found (no files with <!-- shareUrn: ... -->).")
+    # ── Step 2: Also scan local files for any with shareUrn ──
+    local_posts = []
+    if POSTS_DIR.exists():
+        for f in POSTS_DIR.glob("*.md"):
+            content = f.read_text(encoding="utf-8")
+            for line in content.split("\n"):
+                if line.startswith("<!-- shareUrn:"):
+                    parts = line.split(":", 1)
+                    if len(parts) > 1:
+                        urn = parts[1].strip().strip("-->").strip()
+                        local_posts.append({"urn": urn, "name": f.name, "file": str(f)})
+                    break
+    
+    # ── Step 3: Merge (avoid duplicates) ──
+    seen_urns = set()
+    all_posts = []
+    
+    for p in org_posts:
+        if p["urn"] not in seen_urns:
+            seen_urns.add(p["urn"])
+            all_posts.append(p)
+    
+    for p in local_posts:
+        if p["urn"] not in seen_urns:
+            seen_urns.add(p["urn"])
+            all_posts.append(p)
+    
+    if not all_posts:
+        print("📭 No published posts found.")
         return
 
-    print(f"Found {len(posts)} posts with URNs.")
+    print(f"\n📊 Found {len(all_posts)} total posts. Fetching analytics...")
     
-    # 1. Fetch Social Actions (Likes/Comments) - Loop
-    # 2. Fetch Impressions - Batch
-    
-    urns = [p["urn"] for p in posts]
-    impressions_map = fetch_impressions_batch(urns, org_id, get_headers(access_token))
+    # ── Step 4: Fetch engagement data ──
+    urns = [p["urn"] for p in all_posts]
+    impressions_map = fetch_impressions_batch(urns, org_id, headers) if org_id else {}
     
     analytics_data = []
+    
+    print(f"\n{'Post':<50} {'Likes':<8} {'Comm.':<8} {'Views':<8}")
+    print("─" * 80)
 
-    print("\n📊 Fetching analytics...")
-    print(f"{'Post':<40} {'Likes':<8} {'Comm.':<8} {'Views':<8}")
-    print("─" * 70)
-
-    for post in posts:
+    for post in all_posts:
         urn = post["urn"]
-        likes, comments = fetch_social_actions(urn, get_headers(access_token))
-        views = impressions_map.get(urn, 0)
+        likes, comments = fetch_social_actions(urn, headers)
+        stats = impressions_map.get(urn, {})
+        views = stats.get("impressions", 0) if isinstance(stats, dict) else 0
+        clicks = stats.get("clicks", 0) if isinstance(stats, dict) else 0
+        
+        # Generate a safe filename for storage
+        safe_name = post.get("name", "untitled")[:60]
+        filename = post.get("file", safe_name).split("/")[-1] if "file" in post else f"linkedin_{urn.split(':')[-1][:12]}.md"
         
         row = {
-            "file": post["file"],
-            "filename": post["name"], # Standardized name
+            "filename": filename,
+            "name": safe_name,
             "urn": urn,
             "likes": likes,
             "comments": comments,
             "impressions": views,
+            "clicks": clicks,
+            "date": post.get("date", ""),
+            "content_preview": post.get("content_preview", ""),
             "fetched_at": datetime.now().isoformat()
         }
         analytics_data.append(row)
         
-        print(f"{post['name']:<40} {likes:<8} {comments:<8} {views:<8}")
-        time.sleep(0.2) 
+        display_name = safe_name[:48]
+        print(f"{display_name:<50} {likes:<8} {comments:<8} {views:<8}")
+        time.sleep(0.2)
 
     save_analytics(analytics_data)
-    print(f"\n✅ Data saved to {ANALYTICS_FILE}")
+    print(f"\n✅ Data saved! {len(analytics_data)} posts tracked.")
 
 if __name__ == "__main__":
     main()
