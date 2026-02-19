@@ -591,10 +591,10 @@ def render_post_card(post, prefix="", allow_delete=False, draft_delete_only=Fals
         col_img, col_content, col_del = st.columns([1, 2, 0.2], gap="large")
 
         with col_del:
-            if can_delete and st.button("🗑️", key=f"del_post_{k}", help="Delete this draft"):
+            if can_delete and st.button("🗑️", key=f"del_post_{k}", help="Delete this post"):
                 ok, msg = delete_post_everywhere(post)
                 if ok:
-                    st.toast(f"Deleted draft: {post['filename']}")
+                    st.toast(f"Deleted: {post['filename']}")
                     time.sleep(0.6)
                     st.rerun()
                 else:
@@ -629,6 +629,10 @@ def render_post_card(post, prefix="", allow_delete=False, draft_delete_only=Fals
             
             badge = f"status-{status}"
             st.markdown(f'<div style="margin-top: 8px;"><span class="status-badge {badge}">{status.upper()}</span></div>', unsafe_allow_html=True)
+            if is_protected_post(post):
+                st.caption("🔒 Protected system file (plan.md)")
+            else:
+                st.caption(f"File: {post.get('filename', 'unknown')}")
 
             # Image Upload
             uploaded = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg", "webp"], key=f"img_{k}", label_visibility="collapsed")
@@ -899,9 +903,9 @@ with tab_all:
             time.sleep(0.8)
             st.rerun()
 
-    st.caption("Drafts can be deleted one-by-one using the trash icon on each draft card.")
+    st.caption("One-by-one delete is available for all posts except protected plan.md. Bulk clear only removes drafts.")
     for p in posts:
-        render_post_card(p, prefix="all", allow_delete=True, draft_delete_only=True)
+        render_post_card(p, prefix="all", allow_delete=True, draft_delete_only=False)
 
 with tab_planning:
     plist = [p for p in posts if p.get("status", "pending") == "pending"]
