@@ -454,9 +454,13 @@ def is_draft(post):
     return post.get("status", "pending") == "pending"
 
 
+def is_protected_post(post):
+    return post.get("filename", "").strip() == "plan.md"
+
+
 def delete_post_everywhere(post):
     filename = post.get("filename", "")
-    if filename == "plan.md":
+    if is_protected_post(post):
         return False, "plan.md is protected"
 
     deleted_local = False
@@ -582,7 +586,7 @@ with st.sidebar:
 def render_post_card(post, prefix="", allow_delete=False, draft_delete_only=False):
     status = post.get("status", "pending")
     k = f"{prefix}_{post['filename']}"
-    can_delete = allow_delete and (not draft_delete_only or is_draft(post))
+    can_delete = allow_delete and (not draft_delete_only or is_draft(post)) and not is_protected_post(post)
     with st.container(border=True):
         col_img, col_content, col_del = st.columns([1, 2, 0.2], gap="large")
 
@@ -868,7 +872,7 @@ tab_all, tab_planning, tab_approved, tab_rejected, tab_analytics, tab_lab, tab_g
 # Tab: All Posts
 # ──────────────────────────────────────────────
 with tab_all:
-    draft_posts = [p for p in posts if is_draft(p) and p.get("filename") != "plan.md"]
+    draft_posts = [p for p in posts if is_draft(p) and not is_protected_post(p)]
     c_pub, c_del = st.columns([4, 1])
     with c_pub:
         if st.button("Publish All Approved", type="primary", use_container_width=True):
