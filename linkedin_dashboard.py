@@ -28,305 +28,208 @@ st.set_page_config(
 )
 
 # ──────────────────────────────────────────────
-# Premium CSS Theme (iOS Frosted Glass)
+# Premium CSS Theme (Midnight Editorial)
 # ──────────────────────────────────────────────
 st.markdown("""
 <style>
-    /* ═══ Global Typography & Base ═══ */
-    @import url('https://fonts.googleapis.com/css2?family=sf+pro+display:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
-    
-    /* Lucide Icons for Streamlit (via SVG) */
-    .lucide {
-        width: 1.25em;
-        height: 1.25em;
-        vertical-align: middle;
-        margin-right: 8px;
-        color: inherit;
+    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+    :root {
+        --ink-900: #0f172a;
+        --ink-700: #334155;
+        --ink-500: #64748b;
+        --paper-100: #f8fafc;
+        --accent-1: #f97316;
+        --accent-2: #2563eb;
+        --card-bg: rgba(255, 255, 255, 0.92);
     }
-    
+
     html, body, [class*="css"] {
-        font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif !important;
-        color: #1e293b !important;
+        font-family: 'Manrope', sans-serif !important;
+        color: var(--ink-900) !important;
     }
-    
-    /* ═══ Hide Streamlit defaults ═══ */
+
     .stDeployButton { display: none !important; }
     [data-testid="stDecoration"] { display: none; }
     #MainMenu { visibility: hidden; }
     footer { visibility: hidden; }
     header[data-testid="stHeader"] { background: transparent; }
-    
-    /* ═══ Page Background (Soft Blue Glow) ═══ */
+
     .stApp {
-        background: radial-gradient(circle at 10% 20%, rgba(219, 234, 254, 0.6) 0%, rgba(255, 255, 255, 0) 40%),
-                    radial-gradient(circle at 90% 80%, rgba(224, 242, 254, 0.6) 0%, rgba(255, 255, 255, 0) 40%),
-                    #f8fafc; /* Slate-50 base */
+        background:
+            radial-gradient(900px 500px at 95% 5%, rgba(37, 99, 235, 0.16), transparent 60%),
+            radial-gradient(700px 380px at 0% 90%, rgba(249, 115, 22, 0.14), transparent 55%),
+            linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
     }
-    
-    /* ═══ Sidebar ═══ */
+
     section[data-testid="stSidebar"] {
-        background: rgba(255, 255, 255, 0.7) !important;
-        backdrop-filter: blur(20px) saturate(180%);
-        border-right: 1px solid rgba(255,255,255,0.6);
-        box-shadow: 2px 0 24px rgba(0,0,0,0.02);
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.96) 0%, rgba(30, 41, 59, 0.96) 100%) !important;
+        border-right: 1px solid rgba(148, 163, 184, 0.2);
     }
     section[data-testid="stSidebar"] .stMarkdown p,
     section[data-testid="stSidebar"] .stMarkdown span,
     section[data-testid="stSidebar"] .stMarkdown h1,
     section[data-testid="stSidebar"] .stMarkdown h2,
     section[data-testid="stSidebar"] div {
-        color: #334155 !important;
+        color: #e2e8f0 !important;
     }
-    
-    /* ═══ Custom KPI Card (Frosted Glass) ═══ */
-    .kpi-card {
-        background: rgba(255, 255, 255, 0.65);
-        border: 1px solid rgba(255, 255, 255, 0.8);
-        border-radius: 20px;
-        padding: 24px;
-        text-align: center;
-        transition: all 0.3s ease;
-        backdrop-filter: blur(12px);
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
-    }
-    .kpi-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 12px 32px rgba(186, 230, 253, 0.25);
-        border-color: #bae6fd;
-    }
-    .kpi-value {
-        font-size: 2.4rem;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-        background: linear-gradient(135deg, #0ea5e9, #3b82f6);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        line-height: 1.2;
-        margin: 6px 0;
-    }
-    .kpi-value.green {
-        background: linear-gradient(135deg, #10b981, #059669);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-    .kpi-value.amber {
-        background: linear-gradient(135deg, #f59e0b, #d97706);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-    .kpi-label {
-        font-size: 0.75rem;
-        font-weight: 600;
-        color: #64748b;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-    .kpi-icon {
-        font-size: 1.5rem;
-        margin-bottom: 8px;
-        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.05));
-    }
-    
-    /* ═══ Status Badges ═══ */
-    .status-badge {
-        display: inline-block;
-        padding: 5px 12px;
-        border-radius: 12px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        letter-spacing: 0.3px;
-    }
-    .status-approved  { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
-    .status-rejected  { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
-    .status-pending   { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
-    .status-published { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
-    
-    /* ═══ Section Titles ═══ */
-    .section-title {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #1e293b;
-        letter-spacing: -0.01em;
-        margin: 32px 0 16px 0;
-    }
-    
-    /* ═══ Sidebar Stats ═══ */
+
     .sidebar-stat {
-        background: rgba(255, 255, 255, 0.5);
-        border: 1px solid rgba(255, 255, 255, 0.8);
+        background: rgba(30, 41, 59, 0.55);
+        border: 1px solid rgba(148, 163, 184, 0.22);
         border-radius: 14px;
         padding: 12px;
         text-align: center;
         margin-bottom: 8px;
+        backdrop-filter: blur(8px);
     }
     .sidebar-stat-value {
-        font-size: 1.6rem;
-        font-weight: 700;
-        color: #334155;
+        font-size: 1.45rem;
+        font-weight: 800;
+        color: #f8fafc;
     }
     .sidebar-stat-label {
-        font-size: 0.65rem;
-        color: #64748b;
+        font-size: 0.67rem;
+        color: #cbd5e1;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-weight: 600;
-    }
-    
-    /* ═══ Post Card (Glass) ═══ */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        border-color: rgba(255, 255, 255, 0.8) !important;
-        border-radius: 20px !important;
-        background: rgba(255, 255, 255, 0.6) !important;
-        backdrop-filter: blur(16px) saturate(120%);
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.01) !important;
-        transition: all 0.2s ease;
-    }
-    div[data-testid="stVerticalBlockBorderWrapper"]:hover {
-        border-color: #bae6fd !important;
-        box-shadow: 0 10px 25px -5px rgba(14, 165, 233, 0.15) !important;
-        transform: translateY(-2px);
-    }
-    
-    /* ═══ Tabs Styling ═══ */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background: rgba(255, 255, 255, 0.5);
-        padding: 6px;
-        border-radius: 16px;
-        box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
-    }
-    .stTabs [data-baseweb="tab"] {
-        border-radius: 10px;
-        color: #64748b;
-        font-weight: 600;
-        font-size: 0.9rem;
-        padding: 8px 16px;
-        border: none !important;
-        background: transparent;
-    }
-    .stTabs [aria-selected="true"] {
-        background: #fff !important;
-        color: #0284c7 !important;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05) !important;
-    }
-    
-    /* ═══ Buttons ═══ */
-    .stButton > button {
-        border-radius: 12px !important;
-        font-weight: 600 !important;
-        border: 1px solid #e2e8f0 !important;
-        background: white !important;
-        color: #475569 !important;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
-        transition: all 0.2s ease !important;
-    }
-    .stButton > button:hover {
-        border-color: #cbd5e1 !important;
-        background: #f8fafc !important;
-        transform: translateY(-1px);
-    }
-    .stButton > button[kind="primary"] {
-        background: linear-gradient(135deg, #0ea5e9, #2563eb) !important;
-        border: none !important;
-        color: white !important;
-        box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3) !important;
-    }
-    .stButton > button[kind="primary"]:hover {
-        background: linear-gradient(135deg, #0284c7, #1d4ed8) !important;
-        box-shadow: 0 6px 16px rgba(14, 165, 233, 0.4) !important;
-    }
-    
-    /* ═══ Top Header Bar ═══ */
-    .top-header {
-        background: rgba(255, 255, 255, 0.6);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.8);
-        border-radius: 24px;
-        padding: 32px 40px;
-        margin-bottom: 32px;
-        box-shadow: 0 10px 40px -10px rgba(14, 165, 233, 0.1);
-    }
-    .top-header h1 {
-        font-size: 2rem;
-        font-weight: 800;
-        letter-spacing: -0.03em;
-        background: linear-gradient(135deg, #0f172a, #334155);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin: 0;
-    }
-    .top-header p {
-        color: #64748b;
-        font-size: 1rem;
-        margin: 8px 0 0 0;
-        font-weight: 500;
+        letter-spacing: 0.8px;
+        font-weight: 700;
     }
 
-    /* ═══ Buttons (Normalize Sizes) ═══ */
+    .top-header {
+        background: linear-gradient(120deg, rgba(15, 23, 42, 0.96), rgba(30, 41, 59, 0.96));
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        border-radius: 24px;
+        padding: 28px 32px;
+        margin-bottom: 28px;
+        box-shadow: 0 20px 45px rgba(15, 23, 42, 0.18);
+    }
+    .top-header h1 {
+        margin: 0;
+        font-family: 'Space Grotesk', sans-serif !important;
+        font-size: 2rem;
+        color: #f8fafc !important;
+        letter-spacing: -0.04em;
+    }
+    .top-header p {
+        margin: 10px 0 0 0;
+        color: #cbd5e1;
+        font-size: 0.96rem;
+        font-weight: 500;
+    }
+    .top-header .header-pill {
+        margin-top: 14px;
+        display: inline-flex;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: rgba(248, 250, 252, 0.12);
+        border: 1px solid rgba(248, 250, 252, 0.24);
+        color: #f8fafc;
+        font-size: 0.78rem;
+        letter-spacing: 0.4px;
+    }
+
+    .section-title {
+        font-family: 'Space Grotesk', sans-serif !important;
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: var(--ink-900);
+        margin: 30px 0 14px 0;
+    }
+
+    .status-badge {
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.45px;
+    }
+    .status-approved  { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .status-rejected  { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .status-pending   { background: #ffedd5; color: #9a3412; border: 1px solid #fdba74; }
+    .status-published { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        border: 1px solid rgba(148, 163, 184, 0.22) !important;
+        border-radius: 18px !important;
+        background: var(--card-bg) !important;
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08) !important;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"]:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 18px 34px rgba(15, 23, 42, 0.12) !important;
+    }
+
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        padding: 8px;
+        border-radius: 16px;
+        background: rgba(15, 23, 42, 0.06);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    .stTabs [data-baseweb="tab"] {
+        font-weight: 700;
+        color: var(--ink-700);
+        border-radius: 12px;
+        padding: 8px 15px;
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, var(--accent-1), #ea580c) !important;
+        color: #fff !important;
+        box-shadow: 0 8px 18px rgba(249, 115, 22, 0.28);
+    }
+
     button {
-        height: auto !important;
         min-height: 42px !important;
         padding-top: 8px !important;
         padding-bottom: 8px !important;
     }
-    
-    /* Target specifically Streamlit buttons to ensure consistency */
-    .stButton > button, div[data-testid="stPopover"] > button {
+    .stButton > button,
+    div[data-testid="stPopover"] > button {
         width: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
         border-radius: 12px !important;
-        font-weight: 600 !important;
+        border: 1px solid rgba(148, 163, 184, 0.36) !important;
+        background: #fff !important;
+        color: var(--ink-900) !important;
+        font-weight: 700 !important;
+        box-shadow: 0 6px 15px rgba(15, 23, 42, 0.05) !important;
+        transition: all 0.2s ease !important;
+    }
+    .stButton > button:hover {
+        transform: translateY(-1px);
+        border-color: rgba(15, 23, 42, 0.26) !important;
+    }
+    .stButton > button[kind="primary"] {
+        border: 0 !important;
+        background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+        color: #fff !important;
     }
 
-    /* ═══ Inputs & Widgets ═══ */
-    /* Force text color for all input types */
     input, textarea, select {
-        color: #1e293b !important;
-        caret-color: #0ea5e9;
+        color: var(--ink-900) !important;
+        caret-color: var(--accent-2);
     }
-    
-    /* Target Baseweb containers */
-    div[data-baseweb="input"], div[data-baseweb="base-input"], 
+    div[data-baseweb="input"], div[data-baseweb="base-input"],
     div[data-baseweb="select"], div[data-baseweb="textarea"] {
-        background-color: #ffffff !important;
-        border: 1px solid #cbd5e1 !important;
+        background-color: #fff !important;
+        border: 1px solid rgba(148, 163, 184, 0.5) !important;
         border-radius: 12px !important;
     }
-    
-    /* Fix File Uploader (Force Light) */
+    .stTextArea textarea:focus, .stTextInput input:focus {
+        border-color: #2563eb !important;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+    }
+
     section[data-testid="stFileUploader"] {
         background-color: #f8fafc !important;
-        border: 2px dashed #cbd5e1 !important;
+        border: 1px dashed rgba(37, 99, 235, 0.4) !important;
+        border-radius: 12px !important;
     }
-    section[data-testid="stFileUploader"] div {
-        color: #64748b !important;
-    }
-    section[data-testid="stFileUploader"] small {
-        color: #94a3b8 !important;
-    }
-    
-    /* Fix Popover Button Style */
-    div[data-testid="stPopover"] > button {
-        border-color: #fecccc !important;
-        background-color: #fff1f2 !important;
-        color: #e11d48 !important;
-    }
-    div[data-testid="stPopover"] > button:hover {
-        background-color: #ffe4e6 !important;
-        border-color: #fda4af !important;
-    }
-
-    .stTextArea textarea:focus, .stTextInput input:focus {
-        border-color: #38bdf8 !important;
-        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1) !important;
-    }
-    
-    /* ═══ Hide Default Image Border ═══ */
     .stImage > img {
         border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -547,6 +450,38 @@ def trigger_publish():
         return str(e)
 
 
+def is_draft(post):
+    return post.get("status", "pending") == "pending"
+
+
+def delete_post_everywhere(post):
+    filename = post.get("filename", "")
+    if filename == "plan.md":
+        return False, "plan.md is protected"
+
+    deleted_local = False
+    file_path = post.get("file")
+    if file_path:
+        try:
+            local_path = Path(file_path)
+            if local_path.exists():
+                local_path.unlink()
+                deleted_local = True
+        except Exception as e:
+            return False, f"Local delete failed: {e}"
+
+    if fm.is_active() and filename:
+        try:
+            fm.db.collection("posts").document(filename).delete()
+        except Exception as e:
+            if not deleted_local:
+                return False, f"Cloud delete failed: {e}"
+
+    if deleted_local or (fm.is_active() and filename):
+        return True, "Deleted"
+    return False, "No deletable source found"
+
+
 # ──────────────────────────────────────────────
 # Load Data
 # ──────────────────────────────────────────────
@@ -564,15 +499,13 @@ published = sum(1 for p in posts if p.get("status") == "published")
 with st.sidebar:
     # Logo / Brand
     st.markdown("""
-    <div style="text-align:center; padding: 20px 0 10px 0;">
-        <div style="font-size: 1.5rem; font-weight: bold; color: #818cf8; margin-bottom: 5px;">DAOAI</div>
-        <div style="font-size: 1.3rem; font-weight: 800; 
-             background: linear-gradient(135deg, #c7d2fe, #818cf8);
-             -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
-            Content Studio
+    <div style="padding: 18px 0 12px 0;">
+        <div style="font-size: 0.7rem; letter-spacing: 1.8px; text-transform: uppercase; color: #94a3b8;">DaoAI Workflow</div>
+        <div style="font-size: 1.55rem; font-weight: 800; margin-top: 4px; color: #f8fafc;">
+            LinkedIn Studio
         </div>
-        <div style="font-size: 0.7rem; color: #64748b; letter-spacing: 2px; text-transform: uppercase; margin-top: 4px;">
-            DaoAI LinkedIn
+        <div style="font-size: 0.78rem; color: #cbd5e1; margin-top: 4px; line-height: 1.5;">
+            Content pipeline control center
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -639,28 +572,29 @@ with st.sidebar:
         pass
     
     st.markdown("---")
-    if st.button("Refresh", use_container_width=True):
+    if st.button("Refresh Dashboard", use_container_width=True):
         st.rerun()
 
 
 # ──────────────────────────────────────────────
 # Post Card Renderer
 # ──────────────────────────────────────────────
-def render_post_card(post, prefix=""):
+def render_post_card(post, prefix="", allow_delete=False, draft_delete_only=False):
     status = post.get("status", "pending")
     k = f"{prefix}_{post['filename']}"
+    can_delete = allow_delete and (not draft_delete_only or is_draft(post))
     with st.container(border=True):
         col_img, col_content, col_del = st.columns([1, 2, 0.2], gap="large")
 
         with col_del:
-            if st.button("🗑️", key=f"del_post_{k}", help="Delete this post"):
-                try:
-                    os.remove(post["file"])
-                    st.toast(f"Deleted {post['filename']}")
-                    time.sleep(1)
+            if can_delete and st.button("🗑️", key=f"del_post_{k}", help="Delete this draft"):
+                ok, msg = delete_post_everywhere(post)
+                if ok:
+                    st.toast(f"Deleted draft: {post['filename']}")
+                    time.sleep(0.6)
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Error deleting: {e}")
+                else:
+                    st.error(msg)
 
         with col_img:
             img_path = post.get("image", "")
@@ -861,8 +795,9 @@ Write ONLY the revised post text. No explanations, no headers, just the post con
 st.markdown("""
 <div class="top-header" style="display: flex; justify-content: space-between; align-items: center;">
     <div>
-        <h1>LinkedIn Content Studio</h1>
-        <p>Strategic management for your professional presence</p>
+        <h1>Content Command Center</h1>
+        <p>Plan, revise, approve, and publish with one operating view.</p>
+        <span class="header-pill">Editorial Pipeline • Real-time Ops</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -933,6 +868,7 @@ tab_all, tab_planning, tab_approved, tab_rejected, tab_analytics, tab_lab, tab_g
 # Tab: All Posts
 # ──────────────────────────────────────────────
 with tab_all:
+    draft_posts = [p for p in posts if is_draft(p) and p.get("filename") != "plan.md"]
     c_pub, c_del = st.columns([4, 1])
     with c_pub:
         if st.button("Publish All Approved", type="primary", use_container_width=True):
@@ -942,22 +878,26 @@ with tab_all:
                 time.sleep(2)
                 st.rerun()
     with c_del:
-        if st.button("🗑️ Clear All Drafts", type="primary", help="Delete ALL posts (Irreversible!)"):
-            # Confirm dialog logic would be better but keeping it simple as per request 'one click'
-            # But let's add a small check or just do it. Request said 'one click clear'.
-            cnt = 0
-            for p in posts:
-                if p["filename"] == "plan.md": continue
-                try:
-                    os.remove(p["file"])
-                    cnt += 1
-                except: pass
-            st.toast(f"Boom! {cnt} posts deleted.")
-            time.sleep(1)
+        clear_label = f"🗑️ 清除全部 Draft ({len(draft_posts)})"
+        if st.button(clear_label, type="primary", help="One-click delete all drafts", disabled=len(draft_posts) == 0):
+            deleted = 0
+            failed = 0
+            for p in draft_posts:
+                ok, _ = delete_post_everywhere(p)
+                if ok:
+                    deleted += 1
+                else:
+                    failed += 1
+            if deleted:
+                st.toast(f"Deleted {deleted} drafts")
+            if failed:
+                st.warning(f"{failed} drafts could not be deleted.")
+            time.sleep(0.8)
             st.rerun()
 
+    st.caption("Drafts can be deleted one-by-one using the trash icon on each draft card.")
     for p in posts:
-        render_post_card(p, prefix="all")
+        render_post_card(p, prefix="all", allow_delete=True, draft_delete_only=True)
 
 with tab_planning:
     plist = [p for p in posts if p.get("status", "pending") == "pending"]
