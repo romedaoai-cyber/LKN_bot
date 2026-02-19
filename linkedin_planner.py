@@ -47,10 +47,22 @@ def get_rolling_calendar():
         current += timedelta(days=1)
     return calendar
 
+def get_api_key():
+    import os
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
+            api_key = st.secrets["GEMINI_API_KEY"]
+    except ImportError:
+        pass
+    if not api_key:
+        api_key = "AIzaSyBqQF9-ivsvkAjbGhb-OIvDv6dbtBmK38M"
+    return api_key
+
 def generate_brainstorm_topics(user_feedback=""):
     """Generate exactly 10 topic suggestions based on analytics."""
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key: return []
+    api_key = get_api_key()
 
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-2.0-flash")
@@ -104,8 +116,7 @@ def regenerate_single_topic(index, user_feedback=""):
     topics_data = json.loads(BRAINSTORM_FILE.read_text(encoding="utf-8"))
     if index < 0 or index >= len(topics_data): return topics_data
 
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key: return topics_data
+    api_key = get_api_key()
 
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-1.5-flash") # Use faster model for single topic
