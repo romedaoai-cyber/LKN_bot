@@ -304,7 +304,7 @@ def load_posts():
     for p in local_posts:
         merged[p["filename"]] = p
         
-    # Then, supplement with cloud metadata (but NEVER overwrite local text/status)
+    # Then, supplement with cloud metadata for LOCAL posts only
     for cp in cloud_posts:
         fname = cp.get("filename")
         if not fname: continue
@@ -317,9 +317,6 @@ def load_posts():
             for key, val in cp.items():
                 if key not in merged[fname] or merged[fname][key] is None:
                     merged[fname][key] = val
-        else:
-            # Cloud-only post (no local file) — use cloud data as-is
-            merged[fname] = cp
 
     return sorted(merged.values(), key=lambda x: x.get("date", "9999-99-99"))
 
@@ -477,6 +474,8 @@ def delete_post_everywhere(post):
 
     deleted_local = False
     file_path = post.get("file")
+    if not file_path:
+        return False, "Cannot delete: local file path is missing."
     if file_path:
         try:
             local_path = Path(file_path)
