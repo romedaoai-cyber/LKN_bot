@@ -751,8 +751,12 @@ def render_post_card(post, prefix="", allow_delete=False, draft_delete_only=Fals
 
             revisions = post.get("revisions")
             revised_at = post.get("revised_at")
-            if revisions and int(revisions) > 0:
-                st.success(f"AI Revised (v{int(revisions)+1}) • {revised_at}")
+            try:
+                rev_count = int(revisions) if revisions else 0
+            except (ValueError, TypeError):
+                rev_count = 0
+            if rev_count > 0:
+                st.success(f"AI Revised (v{rev_count+1}) • {revised_at}")
 
             text_val = st.text_area(
                 "Content", value=post.get("text", ""),
@@ -1048,15 +1052,15 @@ with tab_analytics:
                     import sys
                     captured_output = io.StringIO()
                     sys.stdout = captured_output
-                    
-                    import check_linkedin_access
-                    import importlib
-                    importlib.reload(check_linkedin_access)
-                    check_linkedin_access.main()
-                    
-                    sys.stdout = sys.__stdout__
+                    try:
+                        import check_linkedin_access
+                        import importlib
+                        importlib.reload(check_linkedin_access)
+                        check_linkedin_access.main()
+                    finally:
+                        sys.stdout = sys.__stdout__
                     debug_log = captured_output.getvalue()
-                    
+
                     st.info("LinkedIn Access Report")
                     st.code(debug_log)
                 except Exception as e:
@@ -1075,14 +1079,14 @@ with tab_analytics:
                     import sys
                     captured_output = io.StringIO()
                     sys.stdout = captured_output
-                    
-                    import linkedin_analytics
-                    import importlib
-                    importlib.reload(linkedin_analytics)
-                    linkedin_analytics.main()
-                    
-                    # Restore stdout
-                    sys.stdout = sys.__stdout__
+                    try:
+                        import linkedin_analytics
+                        import importlib
+                        importlib.reload(linkedin_analytics)
+                        linkedin_analytics.main()
+                    finally:
+                        # Restore stdout even if an exception occurs
+                        sys.stdout = sys.__stdout__
                     debug_log = captured_output.getvalue()
                     
                     st.success("Sync Finished!")
