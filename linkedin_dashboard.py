@@ -360,6 +360,8 @@ def update_post_metadata(filepath, status=None, feedback=None, image=None, subje
 
     # If new fields weren't found, insert them at the top
     insert_idx = 0
+    if status is not None and not found["status"]:
+        new_lines.insert(insert_idx, f"<!-- status: {status} -->")
     if subject is not None and not found["subject"]:
         new_lines.insert(insert_idx, f"<!-- subject: {subject} -->")
     if date is not None and not found["date"]:
