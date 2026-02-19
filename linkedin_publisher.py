@@ -552,32 +552,43 @@ def main():
                     published.add(entry["file"])
 
         post_files = sorted(POSTS_DIR.glob("*.md"))
-        today = datetime.now().strftime("%Y-%m-%d")
+        now = datetime.now()
+        now_str = now.strftime("%Y-%m-%d %H:%M")
 
-        print(f"\n🔍 Checking for approved posts due on or before {today}...\n")
+        print(f"\n🔍 Checking for approved posts due on or before {now_str}...\n")
 
         processed_count = 0
         for pf in post_files:
             if str(pf) in published:
                 continue
-            
+
             post = parse_post_file(pf)
             if not post:
                 continue
 
             post_date = post.get("date")
+            post_time = post.get("time", "00:00")
             post_status = post.get("status", "pending").lower()
 
-            # Logic: Must be APPROVED and date must be TODAY or EARLIER (catch-up)
-            if post_status == "approved" and post_date and post_date <= today:
-                print(f"\n🚀 Publishing approved post due {post_date}: {pf.name}")
+            if not post_date:
+                continue
+
+            # Combine date + time for comparison
+            try:
+                scheduled_dt = datetime.strptime(f"{post_date} {post_time}", "%Y-%m-%d %H:%M")
+            except ValueError:
+                scheduled_dt = datetime.strptime(post_date, "%Y-%m-%d")
+
+            # Logic: Must be APPROVED and scheduled datetime must be NOW or EARLIER
+            if post_status == "approved" and scheduled_dt <= now:
+                print(f"\n🚀 Publishing approved post due {post_date} {post_time}: {pf.name}")
                 post_urn = publish_post(post, token, org_id)
                 if post_urn:
                     save_post_urn(post["file"], post_urn)
                     processed_count += 1
                     time.sleep(5)  # Rate limit courtesy
-            
-            elif post_status != "approved" and post_date and post_date <= today:
+
+            elif post_status != "approved" and scheduled_dt <= now:
                 print(f"⚠️  Skipping due post (status={post_status}): {pf.name}")
 
         if processed_count == 0:
