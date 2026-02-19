@@ -525,6 +525,7 @@ def main():
         if not org_id:
             print("❌ No LINKEDIN_ORG_ID in .env. Run 'auth' first or add manually.")
             return
+        post = parse_post_file(sys.argv[2])
         if post:
             print(f"\n🚀 Publishing: {sys.argv[2]}")
             post_urn = publish_post(post, token, org_id)

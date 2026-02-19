@@ -793,7 +793,8 @@ def render_post_card(post, prefix="", allow_delete=False, draft_delete_only=Fals
                                     time.sleep(1.5)
                                     st.rerun()
                                 else:
-                                    st.error(f"Failed: {res.stdout}")
+                                    err_msg = (res.stdout or res.stderr or "Unknown error").strip()
+                                    st.error(f"Failed: {err_msg}")
                             except Exception as e:
                                 st.error(f"Error: {e}")
                 
