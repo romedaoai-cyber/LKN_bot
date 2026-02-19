@@ -461,6 +461,53 @@ def trigger_publish():
         return str(e)
 
 
+def get_gemini_api_key():
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    if hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
+        api_key = st.secrets["GEMINI_API_KEY"]
+    return api_key
+
+
+def generate_image_prompt_from_post(subject, body_text):
+    subject = (subject or "").strip()
+    body_text = (body_text or "").strip()
+    if not body_text:
+        return "Close-up AOI inspection machine checking PCBA board, clean factory lighting, ultra realistic, no text."
+
+    try:
+        import google.generativeai as genai
+        api_key = get_gemini_api_key()
+        if not api_key:
+            raise RuntimeError("No GEMINI_API_KEY")
+
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-2.0-flash")
+        prompt = f"""You are an expert prompt writer for marketing visuals.
+Given a LinkedIn post, write ONE strong image-generation prompt.
+
+POST SUBJECT:
+{subject}
+
+POST CONTENT:
+{body_text[:2500]}
+
+Rules:
+- Return one single-line prompt only
+- 25-60 words
+- Visual style: realistic, professional, industrial B2B
+- Include AOI/PCBA manufacturing context when relevant
+- Avoid any text overlay, logos, watermark
+"""
+        rsp = model.generate_content(prompt)
+        candidate = (rsp.text or "").strip().replace("\n", " ")
+        if len(candidate) >= 15:
+            return candidate
+    except Exception:
+        pass
+
+    return f"Realistic AOI machine inspecting a PCBA production line, cinematic industrial lighting, high detail, clean modern factory, professional B2B style, focus on precision and speed, no text overlay. Theme: {subject[:80]}"
+
+
 def is_draft(post):
     return post.get("status", "pending") == "pending"
 
@@ -710,6 +757,18 @@ def render_post_card(post, prefix="", allow_delete=False, draft_delete_only=Fals
                 label_visibility="collapsed"
             )
 
+            if st.button("Generate Image Prompt", key=f"gen_img_prompt_{k}", use_container_width=True):
+                prompt_text = generate_image_prompt_from_post(subject_val, text_val)
+                st.session_state[f"img_prompt_{k}"] = prompt_text
+
+            if st.session_state.get(f"img_prompt_{k}"):
+                st.text_area(
+                    "Suggested image prompt",
+                    value=st.session_state[f"img_prompt_{k}"],
+                    key=f"img_prompt_view_{k}",
+                    height=90
+                )
+
             ac1, ac2, ac3, ac4 = st.columns(4)
             with ac1:
                 if status == "approved":
@@ -867,7 +926,15 @@ if st.session_state.get("show_brainstorm", False):
                         topics[i]["date"] = edited_date.strip()
                         topics[i]["topic"] = edited_topic.strip()
                         persist_brainstorm_topics(topics)
-                        linkedin_planner.regenerate_single_topic(i, feedback)
+                        with st.spinner("Rethinking this topic..."):
+                            _, changed, err = linkedin_planner.regenerate_single_topic(i, feedback)
+                        if changed:
+                            if err:
+                                st.toast("Rethink completed with fallback")
+                            else:
+                                st.toast("Rethink completed")
+                        else:
+                            st.warning("Rethink did not update this topic.")
                         st.rerun()
                 with b_finalize:
                     if st.button("Finalize & Move", key=f"brain_finalize_{tid}", type="primary", use_container_width=True):

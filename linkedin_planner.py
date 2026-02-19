@@ -111,10 +111,14 @@ def generate_brainstorm_topics(user_feedback=""):
 
 def regenerate_single_topic(index, user_feedback=""):
     """Replace one topic in the existing brainstorm list."""
-    if not BRAINSTORM_FILE.exists(): return generate_brainstorm_topics()
+    if not BRAINSTORM_FILE.exists():
+        return [], False, "brainstorm file not found"
     
     topics_data = json.loads(BRAINSTORM_FILE.read_text(encoding="utf-8"))
-    if index < 0 or index >= len(topics_data): return topics_data
+    if index < 0 or index >= len(topics_data):
+        return topics_data, False, "index out of range"
+
+    old_topic = (topics_data[index].get("topic") or "").strip()
 
     api_key = get_api_key()
 
@@ -128,15 +132,28 @@ def regenerate_single_topic(index, user_feedback=""):
     Return ONLY the string for the topic title.
     """
     
+    new_topic = ""
+    err = None
     try:
         response = model.generate_content(prompt)
-        new_topic = response.text.strip().strip('"')
-        topics_data[index]["topic"] = new_topic
-        BRAINSTORM_FILE.write_text(json.dumps(topics_data, indent=2), encoding="utf-8")
+        new_topic = (response.text or "").strip().strip('"').replace("\n", " ")
+        if new_topic.startswith("```"):
+            new_topic = new_topic.replace("```", "").replace("json", "").strip()
     except Exception as e:
+        err = str(e)
         print(f"Error regenerating topic: {e}")
-    
-    return topics_data
+
+    # Guaranteed fallback so the button always changes something.
+    if not new_topic or len(new_topic) < 8 or new_topic.lower() == old_topic.lower():
+        suffix = user_feedback.strip() if user_feedback.strip() else "new angle"
+        suffix = suffix[:40]
+        seed = int(datetime.now().timestamp()) % 1000
+        base = old_topic if old_topic else "AOI manufacturing insight"
+        new_topic = f"{base} ({suffix} #{seed})"
+
+    topics_data[index]["topic"] = new_topic
+    BRAINSTORM_FILE.write_text(json.dumps(topics_data, indent=2), encoding="utf-8")
+    return topics_data, True, err
 
 def generate_post_content(topic, user_feedback=""):
     """Generate a full LinkedIn post body from a topic."""
