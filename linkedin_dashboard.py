@@ -7,6 +7,7 @@ from datetime import datetime
 import subprocess
 import requests
 import urllib.parse
+import base64
 import pandas as pd
 from firebase_manager import fm
 
@@ -1276,7 +1277,11 @@ with tab_lab:
     </div>
     """, unsafe_allow_html=True)
     
-    provider = st.radio("Provider", ["Off", "OpenAI (DALL-E 3)", "Pollinations AI (Free)", "Lorem Picsum (Random)"], horizontal=True)
+    provider = st.radio(
+        "Provider",
+        ["Off", "Google Nano Banana Pro", "OpenAI (DALL-E 3)", "Pollinations AI (Free)", "Lorem Picsum (Random)"],
+        horizontal=True
+    )
     
     if "lab_img_url" not in st.session_state:
         st.session_state.lab_img_url = None
@@ -1284,6 +1289,12 @@ with tab_lab:
         st.session_state.lab_img_bytes = None
     
     openai_key = ""
+    google_key = ""
+    if provider == "Google Nano Banana Pro":
+        google_key = get_gemini_api_key()
+        if not google_key:
+            st.info("Missing GEMINI_API_KEY for Google Nano Banana Pro")
+
     if provider == "OpenAI (DALL-E 3)":
         openai_key = st.text_input("OpenAI API Key", type="password", key="openai_key_input")
         if not openai_key:
@@ -1311,6 +1322,44 @@ with tab_lab:
                         resp_content = resp.content
                     else:
                         st.error(f"Pollinations Error: {resp.status_code}")
+
+                elif provider == "Google Nano Banana Pro":
+                    if not google_key:
+                        st.error("Missing GEMINI_API_KEY")
+                    else:
+                        # Default model can be overridden by env var.
+                        model_name = os.environ.get(
+                            "GOOGLE_NANO_BANANA_MODEL",
+                            "gemini-2.0-flash-preview-image-generation"
+                        )
+                        endpoint = (
+                            f"https://generativelanguage.googleapis.com/v1beta/models/"
+                            f"{model_name}:generateContent?key={google_key}"
+                        )
+                        payload = {
+                            "contents": [{"parts": [{"text": prompt}]}],
+                            "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]}
+                        }
+                        res = requests.post(endpoint, json=payload, timeout=90)
+                        if res.status_code == 200:
+                            data = res.json()
+                            parts = (
+                                data.get("candidates", [{}])[0]
+                                .get("content", {})
+                                .get("parts", [])
+                            )
+                            img_part = next((p for p in parts if p.get("inlineData")), None)
+                            if img_part:
+                                b64 = img_part["inlineData"].get("data", "")
+                                if b64:
+                                    resp_content = base64.b64decode(b64)
+                                    img_url = f"google://{model_name}"
+                                else:
+                                    st.error("Google returned empty image payload.")
+                            else:
+                                st.error(f"Google did not return image data: {res.text[:300]}")
+                        else:
+                            st.error(f"Google Error ({res.status_code}): {res.text[:300]}")
 
                 elif provider == "Lorem Picsum (Random)":
                     img_url = f"https://picsum.photos/1024/600?random={int(time.time())}"
