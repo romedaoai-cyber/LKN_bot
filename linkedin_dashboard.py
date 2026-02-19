@@ -1330,7 +1330,7 @@ with tab_lab:
                         # Default model can be overridden by env var.
                         model_name = os.environ.get(
                             "GOOGLE_NANO_BANANA_MODEL",
-                            "gemini-2.0-flash-exp"
+                            "gemini-2.5-flash-image"
                         )
                         endpoint = (
                             f"https://generativelanguage.googleapis.com/v1beta/models/"
