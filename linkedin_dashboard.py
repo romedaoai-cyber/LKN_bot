@@ -599,10 +599,10 @@ def render_post_card(post, prefix="", allow_delete=False, draft_delete_only=Fals
     k = f"{prefix}_{post['filename']}"
     can_delete = allow_delete and (not draft_delete_only or is_draft(post)) and not is_protected_post(post)
     with st.container(border=True):
-        col_img, col_content, col_del = st.columns([1, 2, 0.2], gap="large")
+        col_img, col_content, col_del = st.columns([1, 2, 0.4], gap="large")
 
         with col_del:
-            if can_delete and st.button("🗑️", key=f"del_post_{k}", help="Delete this post"):
+            if can_delete and st.button("Delete", key=f"del_post_{k}", help="Delete this post", use_container_width=True):
                 ok, msg = delete_post_everywhere(post)
                 if ok:
                     st.toast(f"Deleted: {post['filename']}")
@@ -835,25 +835,55 @@ if st.session_state.get("show_brainstorm", False):
                 st.rerun()
 
     # 2. Topic List & 2-Week Calendar
-    if Path(linkedin_planner.BRAINSTORM_FILE).exists():
-        topics = json.loads(Path(linkedin_planner.BRAINSTORM_FILE).read_text(encoding="utf-8"))
-        
+    brainstorm_file = Path(linkedin_planner.BRAINSTORM_FILE)
+    if brainstorm_file.exists():
+        topics = json.loads(brainstorm_file.read_text(encoding="utf-8"))
+
+        def persist_brainstorm_topics(updated_topics):
+            if updated_topics:
+                brainstorm_file.write_text(json.dumps(updated_topics, indent=2), encoding="utf-8")
+            elif brainstorm_file.exists():
+                brainstorm_file.unlink()
+
         st.markdown("#### 2-Week Strategy Plan")
+        st.caption("Each item can be edited, rethought, and finalized independently.")
         for i, t in enumerate(topics):
-            col1, col2, col3 = st.columns([1, 4, 1])
-            with col1: st.write(f"`{t['date']}`")
-            with col2: st.write(f"**{t['topic']}**")
-            with col3: 
-                if st.button("Rethink", key=f"rethink_{i}"):
-                    linkedin_planner.regenerate_single_topic(i, feedback)
-                    st.rerun()
-        
-        if st.button("Finalize & Move to Planning", type="primary", use_container_width=True):
-            count = linkedin_planner.convert_to_planning(topics)
-            st.success(f"Moved {count} posts to Planning tab!")
-            st.session_state.show_brainstorm = False
-            time.sleep(2)
-            st.rerun()
+            tid = t.get("id", i)
+            with st.container(border=True):
+                row_date, row_topic = st.columns([1.2, 4], gap="small")
+                edited_date = row_date.text_input("Date", value=t.get("date", ""), key=f"brain_date_{tid}")
+                edited_topic = row_topic.text_input("Topic", value=t.get("topic", ""), key=f"brain_topic_{tid}")
+
+                b_save, b_rethink, b_finalize = st.columns([1, 1, 1.2], gap="small")
+                with b_save:
+                    if st.button("Save", key=f"brain_save_{tid}", use_container_width=True):
+                        topics[i]["date"] = edited_date.strip()
+                        topics[i]["topic"] = edited_topic.strip()
+                        persist_brainstorm_topics(topics)
+                        st.toast("Topic updated")
+                        st.rerun()
+                with b_rethink:
+                    if st.button("Rethink", key=f"brain_rethink_{tid}", use_container_width=True):
+                        topics[i]["date"] = edited_date.strip()
+                        topics[i]["topic"] = edited_topic.strip()
+                        persist_brainstorm_topics(topics)
+                        linkedin_planner.regenerate_single_topic(i, feedback)
+                        st.rerun()
+                with b_finalize:
+                    if st.button("Finalize & Move", key=f"brain_finalize_{tid}", type="primary", use_container_width=True):
+                        topics[i]["date"] = edited_date.strip()
+                        topics[i]["topic"] = edited_topic.strip()
+                        one_topic = [topics[i]]
+                        with st.spinner("Finalizing and generating full post..."):
+                            count = linkedin_planner.convert_to_planning(one_topic, user_feedback=feedback)
+                        if count > 0:
+                            topics.pop(i)
+                            persist_brainstorm_topics(topics)
+                            st.success("Moved 1 post to Planning tab.")
+                            time.sleep(0.7)
+                            st.rerun()
+                        else:
+                            st.error("Failed to move this topic.")
     else:
         st.info("No active brainstorming session. Click above to start.")
 

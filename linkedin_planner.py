@@ -138,29 +138,77 @@ def regenerate_single_topic(index, user_feedback=""):
     
     return topics_data
 
-def convert_to_planning(topics_to_save):
-    """Save topics as pending .md files in the planning tab."""
+def generate_post_content(topic, user_feedback=""):
+    """Generate a full LinkedIn post body from a topic."""
+    api_key = get_api_key()
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-2.0-flash")
+
+    prompt = f"""
+You are a senior LinkedIn writer for DaoAI (AI-powered AOI for PCBA manufacturing).
+
+Write ONE complete LinkedIn post based on this topic:
+TOPIC: {topic}
+OPTIONAL STRATEGY FEEDBACK: {user_feedback}
+
+Rules:
+- English only
+- 140-280 words
+- Clear hook in first 1-2 lines
+- Practical insight and concrete manufacturing relevance
+- End with a short CTA question
+- Plain text only (no markdown syntax)
+"""
+    try:
+        response = model.generate_content(prompt)
+        text = (response.text or "").strip()
+        if len(text) >= 80:
+            return text
+    except Exception as e:
+        print(f"Error generating full post content: {e}")
+    return f"{topic}\n\nWhat changes would this unlock in your production workflow?"
+
+
+def build_post_markdown(date, topic, body):
+    return f"""<!-- date: {date} -->
+<!-- status: pending -->
+<!-- subject: {topic} -->
+<!-- image: -->
+<!-- feedback: -->
+<!-- revisions: 0 -->
+<!-- time: 09:00 -->
+---CONTENT---
+{body}
+---END---
+"""
+
+
+def convert_to_planning(topics_to_save, user_feedback=""):
+    """Save topics as pending .md files in the planning tab with full content."""
     created = 0
     for t in topics_to_save:
         filename = f"plan_{t['date']}_{t['id']}.md"
         filepath = POSTS_DIR / filename
-        
-        content = f"""<!-- date: {t['date']} -->
-<!-- status: pending -->
-<!-- subject: {t['topic']} -->
-<!-- image: -->
-
-Draft for: {t['topic']}
-(AI will expand this into a full post in the planning phase)
-"""
+        full_body = generate_post_content(t["topic"], user_feedback=user_feedback)
+        content = build_post_markdown(t["date"], t["topic"], full_body)
         filepath.write_text(content, encoding="utf-8")
         created += 1
-    
-    # Clear brainstorm file after promotion
-    if BRAINSTORM_FILE.exists(): BRAINSTORM_FILE.unlink()
+
+    # Clear brainstorm file only when all current topics were promoted.
+    if BRAINSTORM_FILE.exists():
+        try:
+            existing = json.loads(BRAINSTORM_FILE.read_text(encoding="utf-8"))
+            promoted_ids = {t.get("id") for t in topics_to_save}
+            remaining = [t for t in existing if t.get("id") not in promoted_ids]
+            if remaining:
+                BRAINSTORM_FILE.write_text(json.dumps(remaining, indent=2), encoding="utf-8")
+            else:
+                BRAINSTORM_FILE.unlink()
+        except Exception:
+            if BRAINSTORM_FILE.exists():
+                BRAINSTORM_FILE.unlink()
     return created
 
 if __name__ == "__main__":
     # Test
     print(generate_brainstorm_topics())
-
