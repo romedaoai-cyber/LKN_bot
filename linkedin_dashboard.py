@@ -807,18 +807,8 @@ Write ONLY the revised post text. No explanations, no headers, just the post con
 
 
 # ──────────────────────────────────────────────
-# Header & Brainstorming Entry
+# Brainstorming Entry
 # ──────────────────────────────────────────────
-st.markdown("""
-<div class="top-header" style="display: flex; justify-content: space-between; align-items: center;">
-    <div>
-        <h1>brainstrom room</h1>
-        <p>Plan, revise, approve, and publish with one operating view.</p>
-        <span class="header-pill">Editorial Pipeline • Real-time Ops</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
 if st.button("Brainstorming Room", type="primary", use_container_width=True):
     st.session_state.show_brainstorm = True
 
