@@ -20,6 +20,16 @@ BASE_DIR = Path(__file__).parent
 POSTS_DIR = BASE_DIR / "linkedin_posts"
 PUBLISHER_SCRIPT = "linkedin_publisher.py" # Assumes in same dir
 FEEDBACK_LOG = POSTS_DIR / "feedback_log.json"
+DEPRECATED_SAMPLE_FILES = {
+    "w1_day1_20260211_npi_paradox.md",
+    "w1_day2_20260212_false_calls.md",
+    "w1_day3_20260213_five_signs.md",
+    "w2_day1_20260216_setup_speed.md",
+    "w2_day2_20260217_auto_bom.md",
+    "w2_day3_20260218_semantic_filter.md",
+    "w2_day4_20260219_spc_dashboard.md",
+    "w2_day5_20260220_product_lineup.md",
+}
 
 st.set_page_config(
     page_title="DaoAI Content Studio",
@@ -249,6 +259,8 @@ def load_posts():
     local_posts = []
     if POSTS_DIR.exists():
         for f in sorted(POSTS_DIR.glob("*.md")):
+            if f.name in DEPRECATED_SAMPLE_FILES:
+                continue
             content = f.read_text(encoding="utf-8")
             meta = {"file": f, "filename": f.name}
             lines = content.split("\n")
@@ -296,6 +308,8 @@ def load_posts():
     for cp in cloud_posts:
         fname = cp.get("filename")
         if not fname: continue
+        if fname in DEPRECATED_SAMPLE_FILES:
+            continue
         
         if fname in merged:
             # Local file exists — keep local text, status, and file path
@@ -455,13 +469,11 @@ def is_draft(post):
 
 
 def is_protected_post(post):
-    return post.get("filename", "").strip() == "plan.md"
+    return False
 
 
 def delete_post_everywhere(post):
     filename = post.get("filename", "")
-    if is_protected_post(post):
-        return False, "plan.md is protected"
 
     deleted_local = False
     file_path = post.get("file")
@@ -629,10 +641,7 @@ def render_post_card(post, prefix="", allow_delete=False, draft_delete_only=Fals
             
             badge = f"status-{status}"
             st.markdown(f'<div style="margin-top: 8px;"><span class="status-badge {badge}">{status.upper()}</span></div>', unsafe_allow_html=True)
-            if is_protected_post(post):
-                st.caption("🔒 Protected system file (plan.md)")
-            else:
-                st.caption(f"File: {post.get('filename', 'unknown')}")
+            st.caption(f"File: {post.get('filename', 'unknown')}")
 
             # Image Upload
             uploaded = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg", "webp"], key=f"img_{k}", label_visibility="collapsed")
@@ -803,7 +812,7 @@ Write ONLY the revised post text. No explanations, no headers, just the post con
 st.markdown("""
 <div class="top-header" style="display: flex; justify-content: space-between; align-items: center;">
     <div>
-        <h1>Content Command Center</h1>
+        <h1>brainstrom room</h1>
         <p>Plan, revise, approve, and publish with one operating view.</p>
         <span class="header-pill">Editorial Pipeline • Real-time Ops</span>
     </div>
@@ -876,7 +885,7 @@ tab_all, tab_planning, tab_approved, tab_rejected, tab_analytics, tab_lab, tab_g
 # Tab: All Posts
 # ──────────────────────────────────────────────
 with tab_all:
-    draft_posts = [p for p in posts if is_draft(p) and not is_protected_post(p)]
+    draft_posts = [p for p in posts if is_draft(p)]
     c_pub, c_del = st.columns([4, 1])
     with c_pub:
         if st.button("Publish All Approved", type="primary", use_container_width=True):
@@ -903,7 +912,7 @@ with tab_all:
             time.sleep(0.8)
             st.rerun()
 
-    st.caption("One-by-one delete is available for all posts except protected plan.md. Bulk clear only removes drafts.")
+    st.caption("One-by-one delete is available on every tab. Bulk clear only removes drafts.")
     for p in posts:
         render_post_card(p, prefix="all", allow_delete=True, draft_delete_only=False)
 
@@ -912,21 +921,21 @@ with tab_planning:
     if not plist:
         st.info("No planned posts.")
     for p in plist:
-        render_post_card(p, prefix="pnd")
+        render_post_card(p, prefix="pnd", allow_delete=True)
 
 with tab_approved:
     alist = [p for p in posts if p.get("status") == "approved"]
     if not alist:
         st.info("No approved posts.")
     for p in alist:
-        render_post_card(p, prefix="apr")
+        render_post_card(p, prefix="apr", allow_delete=True)
 
 with tab_rejected:
     rlist = [p for p in posts if p.get("status") == "rejected"]
     if not rlist:
         st.info("No rejected posts.")
     for p in rlist:
-        render_post_card(p, prefix="rej")
+        render_post_card(p, prefix="rej", allow_delete=True)
 
 
 # ──────────────────────────────────────────────
