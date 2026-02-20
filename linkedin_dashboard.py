@@ -510,9 +510,14 @@ def log_feedback(filename, feedback_text, action):
 
 def trigger_publish():
     try:
+        env_vars = os.environ.copy()
+        if hasattr(st, "secrets"):
+            for k, v in st.secrets.items():
+                env_vars[str(k)] = str(v)
+        
         result = subprocess.run(
             [sys.executable, PUBLISHER_SCRIPT, "publish-all-pending"],
-            capture_output=True, text=True
+            capture_output=True, text=True, env=env_vars
         )
         return result.stdout + result.stderr
     except Exception as e:
@@ -842,9 +847,14 @@ def render_post_card(post, prefix="", allow_delete=False, draft_delete_only=Fals
                     if st.button("Publish Now", key=f"pub_{k}", type="primary", use_container_width=True):
                         with st.spinner("Publishing..."):
                             try:
+                                env_vars = os.environ.copy()
+                                if hasattr(st, "secrets"):
+                                    for key, value in st.secrets.items():
+                                        env_vars[str(key)] = str(value)
+                                        
                                 res = subprocess.run(
                                     [sys.executable, "linkedin_publisher.py", "publish", post["file"]],
-                                    capture_output=True, text=True
+                                    capture_output=True, text=True, env=env_vars
                                 )
                                 if "Published!" in res.stdout:
                                     st.success("Published!")
