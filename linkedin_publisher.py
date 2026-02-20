@@ -25,6 +25,12 @@ from pathlib import Path
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlencode, parse_qs, urlparse
 
+# Optional Firebase support
+try:
+    from firebase_manager import fm as _fm
+except Exception:
+    _fm = None
+
 # ──────────────────────────────────────────────
 # Configuration
 # ──────────────────────────────────────────────
@@ -309,6 +315,7 @@ def parse_post_file(filepath):
         "text": "",
         "image": None,
         "date": None,
+        "time": None,
         "status": "pending",
     }
 
@@ -320,6 +327,8 @@ def parse_post_file(filepath):
         # Parse metadata
         if line.startswith("<!-- date:"):
             post["date"] = line.replace("<!-- date:", "").replace("-->", "").strip()
+        elif line.startswith("<!-- time:"):
+            post["time"] = line.replace("<!-- time:", "").replace("-->", "").strip()
         elif line.startswith("<!-- image:"):
             post["image"] = line.replace("<!-- image:", "").replace("-->", "").strip()
         elif line.startswith("<!-- status:"):
@@ -546,28 +555,60 @@ def main():
             return
 
         published = set()
+        published_filenames = set()
         if PUBLISHED_LOG.exists():
             with open(PUBLISHED_LOG, "r") as f:
                 for entry in json.load(f):
                     published.add(entry["file"])
+                    published_filenames.add(Path(entry["file"]).name)
 
-        post_files = sorted(POSTS_DIR.glob("*.md"))
         now = datetime.now()
         now_str = now.strftime("%Y-%m-%d %H:%M")
 
         print(f"\n🔍 Checking for approved posts due on or before {now_str}...\n")
 
-        processed_count = 0
-        for pf in post_files:
+        # ── Build candidate list: local files + Firebase cloud posts ──
+        candidates = []
+
+        # 1. Local .md files
+        for pf in sorted(POSTS_DIR.glob("*.md")):
             if str(pf) in published:
                 continue
-
             post = parse_post_file(pf)
-            if not post:
-                continue
+            if post:
+                post["_source"] = "local"
+                candidates.append(post)
 
+        # 2. Firebase cloud posts (only those NOT already covered by local files)
+        local_filenames = {Path(c["file"]).name for c in candidates}
+        if _fm and _fm.is_active():
+            print("☁️  Also checking Firebase for approved posts...")
+            cloud_posts = _fm.get_all_posts()
+            for cp in cloud_posts:
+                fname = cp.get("filename", "")
+                if not fname:
+                    continue
+                if fname in published_filenames:
+                    continue
+                if fname in local_filenames:
+                    continue  # already handled by local file
+                # Cloud-only post: use Firebase data directly
+                post = {
+                    "file": str(POSTS_DIR / fname),
+                    "text": cp.get("text", ""),
+                    "image": cp.get("image"),
+                    "date": cp.get("date"),
+                    "time": cp.get("time"),
+                    "status": cp.get("status", "pending"),
+                    "_source": "firebase",
+                    "_filename": fname,
+                }
+                candidates.append(post)
+
+        processed_count = 0
+        for post in candidates:
             post_date = post.get("date")
-            post_time = post.get("time", "00:00")
+            post_time = post.get("time") or "00:00"
             post_status = post.get("status", "pending").lower()
 
             if not post_date:
@@ -579,17 +620,23 @@ def main():
             except ValueError:
                 scheduled_dt = datetime.strptime(post_date, "%Y-%m-%d")
 
+            fname_display = post.get("_filename") or Path(post["file"]).name
+
             # Logic: Must be APPROVED and scheduled datetime must be NOW or EARLIER
             if post_status == "approved" and scheduled_dt <= now:
-                print(f"\n🚀 Publishing approved post due {post_date} {post_time}: {pf.name}")
+                src = post.get("_source", "local")
+                print(f"\n🚀 Publishing [{src}] post due {post_date} {post_time}: {fname_display}")
                 post_urn = publish_post(post, token, org_id)
                 if post_urn:
                     save_post_urn(post["file"], post_urn)
+                    # If from Firebase, mark as published there too
+                    if src == "firebase" and _fm and _fm.is_active():
+                        _fm.sync_post({"filename": fname_display, "status": "published"})
                     processed_count += 1
                     time.sleep(5)  # Rate limit courtesy
 
             elif post_status != "approved" and scheduled_dt <= now:
-                print(f"⚠️  Skipping due post (status={post_status}): {pf.name}")
+                print(f"⚠️  Skipping due post (status={post_status}): {fname_display}")
 
         if processed_count == 0:
             print("\n✨ No approved posts due for publishing.")

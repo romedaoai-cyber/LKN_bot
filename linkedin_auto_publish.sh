@@ -1,6 +1,9 @@
 #!/bin/bash
-# DaoAI LinkedIn Auto-Publisher — runs daily at 9:00 AM PST
-# Publishes only APPROVED posts whose date <= today
+# DaoAI LinkedIn Auto-Publisher — runs on schedule via cron
+# Publishes only APPROVED posts whose scheduled datetime <= now
 
-cd /Users/pin/Kiki
-python3 linkedin_publisher.py publish-all-pending >> /Users/pin/Kiki/linkedin_posts/auto_publish.log 2>&1
+# Always run from the directory where this script lives
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+python3 linkedin_publisher.py publish-all-pending >> "$SCRIPT_DIR/auto_publish.log" 2>&1
