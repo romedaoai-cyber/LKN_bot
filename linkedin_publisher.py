@@ -37,6 +37,7 @@ except Exception:
 DOTENV_PATH = Path(__file__).parent / ".env"
 POSTS_DIR = Path(__file__).parent / "linkedin_posts"
 PUBLISHED_LOG = Path(__file__).parent / "linkedin_published.json"
+NON_POST_FILES = {"plan.md"}  # Strategy/planning docs, not publishable posts
 
 LINKEDIN_API_BASE = "https://api.linkedin.com"
 LINKEDIN_VERSION = "202601"
@@ -51,15 +52,17 @@ SCOPES = "w_organization_social r_organization_social rw_organization_admin"
 
 
 def load_env():
-    """Load environment variables from .env file."""
-    env = {}
+    """Load environment variables from .env file and merge with actual os.environ."""
+    env = dict(os.environ)  # Start with actual system/subprocess env vars
     if DOTENV_PATH.exists():
         with open(DOTENV_PATH, "r") as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith("#") and "=" in line:
                     key, value = line.split("=", 1)
-                    env[key.strip()] = value.strip().strip('"').strip("'")
+                    # Don't overwrite existing higher-priority OS env vars 
+                    if key.strip() not in env:
+                        env[key.strip()] = value.strip().strip('"').strip("'")
     return env
 
 
@@ -572,6 +575,8 @@ def main():
 
         # 1. Local .md files
         for pf in sorted(POSTS_DIR.glob("*.md")):
+            if pf.name in NON_POST_FILES:
+                continue
             if str(pf) in published:
                 continue
             post = parse_post_file(pf)
