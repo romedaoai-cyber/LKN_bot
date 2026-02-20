@@ -464,8 +464,12 @@ def update_post_content(filepath, new_text):
                 si = i
             elif line.strip() == "---END---":
                 ei = i
-        if si != -1 and ei != -1:
-            path.write_text("\n".join(lines[:si+1] + [new_text.strip()] + lines[ei:]), encoding="utf-8")
+                
+        if si != -1:
+            if ei != -1:
+                path.write_text("\n".join(lines[:si+1] + [new_text.strip()] + lines[ei:]), encoding="utf-8")
+            else:
+                path.write_text("\n".join(lines[:si+1] + [new_text.strip()] + ["---END---"]), encoding="utf-8")
             
             # 🔥 Sync to Firebase
             if fm.is_active():
@@ -827,11 +831,36 @@ def render_post_card(post, prefix="", allow_delete=False, draft_delete_only=Fals
                 label_visibility="collapsed"
             )
 
-            if st.button("Generate Image Prompt", key=f"gen_img_prompt_{k}", use_container_width=True):
-                prompt_text = apply_brand_style(
-                    generate_image_prompt_from_post(subject_val, text_val)
-                )
-                st.session_state[f"img_prompt_{k}"] = prompt_text
+            btn_col1, btn_col2 = st.columns(2)
+            with btn_col1:
+                if st.button("Generate Image Prompt", key=f"gen_img_prompt_{k}", use_container_width=True):
+                    prompt_text = apply_brand_style(
+                        generate_image_prompt_from_post(subject_val, text_val)
+                    )
+                    st.session_state[f"img_prompt_{k}"] = prompt_text
+            with btn_col2:
+                if st.button("✨ Auto-Rewrite (AI)", key=f"rewrite_{k}", use_container_width=True):
+                    with st.spinner("Rewriting..."):
+                        try:
+                            import google.generativeai as genai
+                            api_key = get_gemini_api_key()
+                            if api_key:
+                                genai.configure(api_key=api_key)
+                                model = genai.GenerativeModel("gemini-2.0-flash")
+                                prompt = f"You are an expert LinkedIn copywriter for DaoAI. Please rewrite and polish the following LinkedIn post to make it more engaging, professional, and impactful. Keep the same core message and topics but improve readability, flow, and formatting. Plain text only, no markdown headers or horizontal lines.\n\nOriginal Text:\n{text_val}"
+                                response = model.generate_content(prompt)
+                                revised = response.text.strip()
+                                if len(revised) > 20:
+                                    if update_post_content(post["file"], revised):
+                                        st.toast("✅ Content rewritten and saved!")
+                                        time.sleep(1)
+                                        st.rerun()
+                                    else:
+                                        st.error("Failed to save to file.")
+                            else:
+                                st.error("No Gemini API Key found.")
+                        except Exception as e:
+                            st.error(f"AI Rewrite error: {e}")
 
             if st.session_state.get(f"img_prompt_{k}"):
                 st.text_area(
