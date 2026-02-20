@@ -530,8 +530,26 @@ def trigger_publish():
 
 def get_gemini_api_key():
     api_key = os.environ.get("GEMINI_API_KEY", "")
-    if hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
+    if not api_key and hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
         api_key = st.secrets["GEMINI_API_KEY"]
+        
+    if not api_key:
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+            api_key = os.environ.get("GEMINI_API_KEY", "")
+        except ImportError:
+            pass
+            
+    if not api_key:
+        # Final fallback purely for local bypass if strictly needed during testing
+        env_path = BASE_DIR / ".env"
+        if env_path.exists():
+            for line in env_path.read_text(encoding="utf-8").split("\n"):
+                if line.startswith("GEMINI_API_KEY="):
+                    api_key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+
     return api_key
 
 
