@@ -6,6 +6,7 @@ from pathlib import Path
 from datetime import datetime
 import subprocess
 import requests
+import sys
 import urllib.parse
 import base64
 import pandas as pd
@@ -55,6 +56,9 @@ DEPRECATED_SAMPLE_FILES = {
     "w2_day4_20260219_spc_dashboard.md",
     "w2_day5_20260220_product_lineup.md",
 }
+
+# Files that live in linkedin_posts/ but are NOT publishable posts
+NON_POST_FILES = {"plan.md"}
 
 st.set_page_config(
     page_title="DaoAI Content Studio",
@@ -284,7 +288,7 @@ def load_posts():
     local_posts = []
     if POSTS_DIR.exists():
         for f in sorted(POSTS_DIR.glob("*.md")):
-            if f.name in DEPRECATED_SAMPLE_FILES:
+            if f.name in DEPRECATED_SAMPLE_FILES or f.name in NON_POST_FILES:
                 continue
             content = f.read_text(encoding="utf-8")
             meta = {"file": f, "filename": f.name}
@@ -333,7 +337,7 @@ def load_posts():
     for cp in cloud_posts:
         fname = cp.get("filename")
         if not fname: continue
-        if fname in DEPRECATED_SAMPLE_FILES:
+        if fname in DEPRECATED_SAMPLE_FILES or fname in NON_POST_FILES:
             continue
 
         if fname in merged:
@@ -507,7 +511,7 @@ def log_feedback(filename, feedback_text, action):
 def trigger_publish():
     try:
         result = subprocess.run(
-            ["python3", PUBLISHER_SCRIPT, "publish-all-pending"],
+            [sys.executable, PUBLISHER_SCRIPT, "publish-all-pending"],
             capture_output=True, text=True
         )
         return result.stdout + result.stderr
@@ -839,7 +843,7 @@ def render_post_card(post, prefix="", allow_delete=False, draft_delete_only=Fals
                         with st.spinner("Publishing..."):
                             try:
                                 res = subprocess.run(
-                                    ["python3", "linkedin_publisher.py", "publish", post["file"]],
+                                    [sys.executable, "linkedin_publisher.py", "publish", post["file"]],
                                     capture_output=True, text=True
                                 )
                                 if "Published!" in res.stdout:
