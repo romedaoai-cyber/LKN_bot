@@ -335,13 +335,40 @@ def load_posts():
         if not fname: continue
         if fname in DEPRECATED_SAMPLE_FILES:
             continue
-        
+
         if fname in merged:
             # Local file exists — keep local text, status, and file path
             # Only add cloud-only fields (e.g., analytics) that local doesn't have
             for key, val in cp.items():
                 if key not in merged[fname] or merged[fname][key] is None:
                     merged[fname][key] = val
+        else:
+            # ── Cloud-only post: recreate local .md file from Firebase data ──
+            text    = cp.get("text", "").strip()
+            status  = cp.get("status", "pending")
+            date    = cp.get("date", "")
+            ptime   = cp.get("time", "09:00")
+            subject = cp.get("subject", "")
+            image   = cp.get("image", "")
+            if not text:
+                continue  # skip empty posts
+            lines_out = []
+            if date:    lines_out.append(f"<!-- date: {date} -->")
+            if ptime:   lines_out.append(f"<!-- time: {ptime} -->")
+            if status:  lines_out.append(f"<!-- status: {status} -->")
+            if subject: lines_out.append(f"<!-- subject: {subject} -->")
+            if image:   lines_out.append(f"<!-- image: {image} -->")
+            lines_out += ["", "---CONTENT---", text, "---END---", ""]
+            fpath = POSTS_DIR / fname
+            try:
+                POSTS_DIR.mkdir(parents=True, exist_ok=True)
+                fpath.write_text("\n".join(lines_out), encoding="utf-8")
+                # Re-parse to build proper meta dict
+                meta = {"file": fpath, "filename": fname, **cp}
+                meta["file"] = fpath
+                merged[fname] = meta
+            except Exception as e:
+                pass  # If write fails, skip silently
 
     return sorted(merged.values(), key=lambda x: x.get("date", "9999-99-99"))
 
