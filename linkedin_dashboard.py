@@ -783,10 +783,14 @@ def render_post_card(post, prefix="", allow_delete=False, draft_delete_only=Fals
                 save_dir = POSTS_DIR / "images"
                 save_dir.mkdir(exist_ok=True)
                 save_path = save_dir / f"{post['filename'].replace('.md', '')}_{uploaded.name}"
-                save_path.write_bytes(uploaded.read())
-                update_post_metadata(post["file"], image=str(save_path.resolve()))
-                st.toast("✅ Image updated!")
-                st.rerun()
+                
+                # Check if this image has already been attached to prevent infinite rerun loops
+                resolved_path = str(save_path.resolve())
+                if restored_path := resolved_path != img_path:
+                    save_path.write_bytes(uploaded.read())
+                    update_post_metadata(post["file"], image=resolved_path)
+                    st.toast("✅ Image updated!")
+                    st.rerun()
             
             if img_path and os.path.exists(img_path):
                 img_pop = st.popover("Image Feedback", use_container_width=True)
