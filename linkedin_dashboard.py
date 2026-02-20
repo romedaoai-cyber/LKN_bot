@@ -21,6 +21,30 @@ BASE_DIR = Path(__file__).parent
 POSTS_DIR = BASE_DIR / "linkedin_posts"
 PUBLISHER_SCRIPT = "linkedin_publisher.py" # Assumes in same dir
 FEEDBACK_LOG = POSTS_DIR / "feedback_log.json"
+BRAND_STYLE_PATH = BASE_DIR / "brand_style.txt"
+
+DEFAULT_BRAND_STYLE = (
+    "Color palette: deep navy blue (#0A2342) and white. "
+    "Lighting: dramatic soft-box industrial lighting with subtle blue accent. "
+    "Mood: precise, clean, high-tech B2B. "
+    "Always: sharp focus, no motion blur, photorealistic, professional commercial photography. "
+    "Never: cartoons, illustrations, 3D renders, text overlays, watermarks."
+)
+
+def load_brand_style() -> str:
+    if BRAND_STYLE_PATH.exists():
+        return BRAND_STYLE_PATH.read_text(encoding="utf-8").strip()
+    return DEFAULT_BRAND_STYLE
+
+def save_brand_style(style: str):
+    BRAND_STYLE_PATH.write_text(style.strip(), encoding="utf-8")
+
+def apply_brand_style(prompt: str) -> str:
+    """Append brand style to any image prompt."""
+    style = load_brand_style()
+    if not style:
+        return prompt
+    return f"{prompt.rstrip('. ')}. Brand style: {style}"
 DEPRECATED_SAMPLE_FILES = {
     "w1_day1_20260211_npi_paradox.md",
     "w1_day2_20260212_false_calls.md",
@@ -485,8 +509,8 @@ def generate_image_prompt_from_post(subject, body_text):
 
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel("gemini-2.0-flash")
-        prompt = f"""You are an expert prompt writer for marketing visuals.
-Given a LinkedIn post, write ONE strong image-generation prompt.
+        prompt = f"""You are an expert prompt writer for photorealistic AI image generation.
+Given a LinkedIn post, write ONE cinematic, photorealistic image prompt.
 
 POST SUBJECT:
 {subject}
@@ -495,11 +519,14 @@ POST CONTENT:
 {body_text[:2500]}
 
 Rules:
-- Return one single-line prompt only
-- 25-60 words
-- Visual style: realistic, professional, industrial B2B
+- Return one single-line prompt only, no explanation
+- 40-70 words
+- MUST start with: "Photorealistic commercial photography,"
+- Include specific camera/lighting details: e.g. "shot on Sony A7R V, 85mm lens, f/2.8, soft studio lighting"
+- Emphasize: sharp focus, high detail, professional B2B industrial setting
 - Include AOI/PCBA manufacturing context when relevant
-- Avoid any text overlay, logos, watermark
+- End with: "no text, no logos, no watermarks, 8K resolution"
+- Avoid illustrations, cartoons, 3D renders — only real-world photographic style
 """
         rsp = model.generate_content(prompt)
         candidate = (rsp.text or "").strip().replace("\n", " ")
@@ -508,7 +535,7 @@ Rules:
     except Exception:
         pass
 
-    return f"Realistic AOI machine inspecting a PCBA production line, cinematic industrial lighting, high detail, clean modern factory, professional B2B style, focus on precision and speed, no text overlay. Theme: {subject[:80]}"
+    return f"Photorealistic commercial photography, AOI machine inspecting a PCBA production line, shot on Sony A7R V, 85mm lens, f/2.8, soft industrial lighting, sharp focus, ultra high detail, clean modern factory floor, professional B2B style, no text, no logos, no watermarks, 8K resolution. Theme: {subject[:80]}"
 
 
 def is_draft(post):
@@ -765,7 +792,9 @@ def render_post_card(post, prefix="", allow_delete=False, draft_delete_only=Fals
             )
 
             if st.button("Generate Image Prompt", key=f"gen_img_prompt_{k}", use_container_width=True):
-                prompt_text = generate_image_prompt_from_post(subject_val, text_val)
+                prompt_text = apply_brand_style(
+                    generate_image_prompt_from_post(subject_val, text_val)
+                )
                 st.session_state[f"img_prompt_{k}"] = prompt_text
 
             if st.session_state.get(f"img_prompt_{k}"):
@@ -1307,8 +1336,29 @@ with tab_lab:
         if not openai_key:
             st.info("Enter your API Key to enable DALL-E 3")
     
+    # ── Brand Style Editor ──
+    with st.expander("🎨 Brand Style (applied to every image)", expanded=False):
+        st.caption("This style is automatically appended to every image prompt to keep visuals consistent.")
+        current_style = load_brand_style()
+        new_style = st.text_area(
+            "Brand Style",
+            value=current_style,
+            height=120,
+            key="brand_style_input",
+            label_visibility="collapsed"
+        )
+        col_s1, col_s2 = st.columns([1, 3])
+        with col_s1:
+            if st.button("💾 Save Style", use_container_width=True):
+                save_brand_style(new_style)
+                st.success("Brand style saved!")
+        with col_s2:
+            if st.button("↩ Reset to Default", use_container_width=True):
+                save_brand_style(DEFAULT_BRAND_STYLE)
+                st.rerun()
+
     st.markdown("---")
-    
+
     c1, c2 = st.columns([3, 1])
     with c1:
         prompt = st.text_input("Prompt (English)", "Futuristic PCBA manufacturing factory, 4k, cinematic lighting")
@@ -1320,10 +1370,11 @@ with tab_lab:
             try:
                 resp_content = None
                 img_url = None
-                
+                final_prompt = apply_brand_style(prompt)
+
                 if provider == "Pollinations AI (Free)":
-                    encoded = urllib.parse.quote(prompt)
-                    img_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=600&model=flux&seed={int(time.time())}"
+                    encoded = urllib.parse.quote(final_prompt)
+                    img_url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=600&model=flux-realism&enhance=true&seed={int(time.time())}"
                     resp = requests.get(img_url, timeout=30)
                     if resp.status_code == 200:
                         resp_content = resp.content
@@ -1344,7 +1395,7 @@ with tab_lab:
                             f"{model_name}:generateContent?key={google_key}"
                         )
                         payload = {
-                            "contents": [{"parts": [{"text": prompt}]}],
+                            "contents": [{"parts": [{"text": final_prompt}]}],
                             "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]}
                         }
                         res = requests.post(endpoint, json=payload, timeout=90)
@@ -1385,7 +1436,7 @@ with tab_lab:
                         }
                         api_data = {
                             "model": "dall-e-3",
-                            "prompt": prompt,
+                            "prompt": final_prompt,
                             "n": 1,
                             "size": "1024x1024"
                         }
