@@ -56,8 +56,7 @@ def get_api_key():
             api_key = st.secrets["GEMINI_API_KEY"]
     except ImportError:
         pass
-    if not api_key:
-        api_key = "AIzaSyBqQF9-ivsvkAjbGhb-OIvDv6dbtBmK38M"
+    # No hardcoded fallback — set GEMINI_API_KEY in .env or Streamlit secrets
     return api_key
 
 def generate_brainstorm_topics(user_feedback=""):
