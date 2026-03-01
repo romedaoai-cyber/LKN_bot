@@ -10,32 +10,36 @@ import os
 
 import config
 from db.local_store import LocalStore
-from linkedin.analytics_fetcher import fetch_metrics
+from linkedin.analytics_fetcher import sync_all_analytics
 
 posts_store = LocalStore(config.POSTS_FILE)
 analytics_store = LocalStore(config.ANALYTICS_FILE)
 
+# Legacy posts dir for scanning old .md files
+LEGACY_POSTS_DIR = config.BASE_DIR / "linkedin_posts"
 
-def _fetch_all_analytics():
-    """Sync analytics for all published posts."""
-    posts = [p for p in posts_store.all() if p["status"] == "published" and p.get("linkedin_urn")]
-    updated = 0
-    for post in posts:
-        metrics = fetch_metrics(post["linkedin_urn"])
-        if metrics:
-            record = analytics_store.get(post["id"]) or {"post_id": post["id"]}
-            record.update({
-                "post_id": post["id"],
-                "linkedin_urn": post["linkedin_urn"],
-                "type": post.get("type", "unknown"),
-                "title": post.get("title", ""),
-                **metrics,
-            })
-            if "id" not in record:
-                record["id"] = post["id"]
-            analytics_store.save(record)
-            updated += 1
-    return updated
+
+def _fetch_all_analytics() -> int:
+    """Sync analytics: API posts + legacy .md URNs, merge with local post types."""
+    rows = sync_all_analytics(posts_dir=LEGACY_POSTS_DIR if LEGACY_POSTS_DIR.exists() else None)
+    if not rows:
+        return 0
+
+    # Enrich with content type from local posts store (match by URN)
+    posts_by_urn = {p["linkedin_urn"]: p for p in posts_store.all() if p.get("linkedin_urn")}
+
+    for row in rows:
+        urn = row.get("linkedin_urn", "")
+        matched_post = posts_by_urn.get(urn)
+        if matched_post:
+            row["type"] = matched_post.get("type", "unknown")
+            row["post_id"] = matched_post.get("id", urn)
+        else:
+            row.setdefault("type", "unknown")
+            row.setdefault("post_id", urn)
+        analytics_store.save(row)
+
+    return len(rows)
 
 
 def _generate_ai_insights(data: list) -> str:
