@@ -15,8 +15,59 @@ from linkedin.analytics_fetcher import sync_all_analytics
 posts_store = LocalStore(config.POSTS_FILE)
 analytics_store = LocalStore(config.ANALYTICS_FILE)
 
-# Legacy posts dir for scanning old .md files
+# Legacy paths
 LEGACY_POSTS_DIR = config.BASE_DIR / "linkedin_posts"
+LEGACY_ANALYTICS_FILE = config.BASE_DIR / "linkedin_analytics_data.json"
+
+
+def _import_legacy_analytics():
+    """
+    One-time import: convert old linkedin_analytics_data.json → new analytics store.
+    Old format: {name, urn, likes, comments, impressions, clicks, fetched_at}
+    New format: {id, linkedin_urn, title, type, impressions, likes, comments, engagement_rate, ...}
+    """
+    import json
+    if not LEGACY_ANALYTICS_FILE.exists():
+        return 0
+
+    try:
+        old_data = json.loads(LEGACY_ANALYTICS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return 0
+
+    existing_urns = {a.get("linkedin_urn") for a in analytics_store.all()}
+    imported = 0
+
+    for row in old_data:
+        urn = row.get("urn", "")
+        if not urn or urn in existing_urns:
+            continue
+
+        impressions = row.get("impressions", 0)
+        likes = row.get("likes", 0)
+        comments = row.get("comments", 0)
+        total = likes + comments
+        engagement_rate = round(total / impressions * 100, 2) if impressions else 0.0
+
+        new_row = {
+            "id": urn,
+            "linkedin_urn": urn,
+            "title": row.get("name", ""),
+            "type": "unknown",
+            "impressions": impressions,
+            "likes": likes,
+            "comments": comments,
+            "shares": 0,
+            "clicks": row.get("clicks", 0),
+            "engagement_rate": engagement_rate,
+            "fetched_at": row.get("fetched_at", datetime.utcnow().isoformat()),
+            "post_id": urn,
+        }
+        analytics_store.save(new_row)
+        existing_urns.add(urn)
+        imported += 1
+
+    return imported
 
 
 def _fetch_all_analytics() -> int:
@@ -84,6 +135,12 @@ def _find_topic_clusters(posts: list) -> dict:
 def render():
     st.header("📊 Phase 6｜數據追蹤 & 回饋")
 
+    # ── Auto-import legacy data on first load ──
+    if not analytics_store.all():
+        imported = _import_legacy_analytics()
+        if imported > 0:
+            st.toast(f"✅ 已從舊版自動匯入 {imported} 筆數據", icon="📥")
+
     # ── Fetch analytics ──
     col1, col2 = st.columns([3, 1])
     with col2:
@@ -99,8 +156,11 @@ def render():
 
     if not all_analytics:
         st.info("尚無數據。請先發布貼文並點擊「同步 LinkedIn 數據」。")
-        if published_posts:
-            st.caption(f"已有 {len(published_posts)} 篇已發布貼文，點擊右上角按鈕同步數據。")
+        if LEGACY_ANALYTICS_FILE.exists():
+            if st.button("📥 匯入舊版數據"):
+                imported = _import_legacy_analytics()
+                st.success(f"已匯入 {imported} 筆")
+                st.rerun()
         return
 
     # ── Overview metrics ──
@@ -143,10 +203,14 @@ def render():
     st.subheader("Top 貼文")
     sorted_by_imp = sorted(all_analytics, key=lambda x: x.get("impressions", 0), reverse=True)[:5]
     for i, a in enumerate(sorted_by_imp, 1):
-        type_e = {"opinion": "🔴", "tutorial": "🟡", "trend": "🟢"}.get(a.get("type", ""), "")
+        type_e = {"opinion": "🔴", "tutorial": "🟡", "trend": "🟢"}.get(a.get("type", ""), "📄")
+        display_title = a.get("title") or a.get("name") or a.get("linkedin_urn", "")[:30]
         st.markdown(
-            f"{i}. {type_e} **{a.get('title', a.get('post_id', '')[:20])}** — "
-            f"觀看 {a.get('impressions', 0):,} | 互動率 {a.get('engagement_rate', 0):.2f}%"
+            f"{i}. {type_e} **{display_title[:60]}** — "
+            f"觀看 {a.get('impressions', 0):,} | "
+            f"👍 {a.get('likes', 0)} | "
+            f"💬 {a.get('comments', 0)} | "
+            f"互動率 {a.get('engagement_rate', 0):.2f}%"
         )
 
     st.divider()
