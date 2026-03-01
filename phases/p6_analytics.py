@@ -17,7 +17,11 @@ analytics_store = LocalStore(config.ANALYTICS_FILE)
 
 # Legacy paths
 LEGACY_POSTS_DIR = config.BASE_DIR / "linkedin_posts"
-LEGACY_ANALYTICS_FILE = config.BASE_DIR / "linkedin_analytics_data.json"
+# Try seed file first (committed to git, works on Streamlit Cloud)
+# Fall back to local legacy file
+_SEED_FILE = config.BASE_DIR / "data" / "seed_analytics.json"
+_LEGACY_FILE = config.BASE_DIR / "linkedin_analytics_data.json"
+LEGACY_ANALYTICS_FILE = _SEED_FILE if _SEED_FILE.exists() else _LEGACY_FILE
 
 
 def _import_legacy_analytics():
