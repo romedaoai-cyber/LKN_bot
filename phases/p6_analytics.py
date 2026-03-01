@@ -141,9 +141,7 @@ def render():
 
     # ── Auto-import legacy data on first load ──
     if not analytics_store.all():
-        imported = _import_legacy_analytics()
-        if imported > 0:
-            st.toast(f"✅ 已從舊版自動匯入 {imported} 筆數據", icon="📥")
+        _import_legacy_analytics()
 
     # ── Fetch analytics ──
     col1, col2 = st.columns([3, 1])
@@ -154,17 +152,32 @@ def render():
             st.success(f"已更新 {count} 篇貼文數據")
             st.rerun()
 
+    # Read from store, fall back directly to seed file if store is still empty
     all_analytics = analytics_store.all()
+    if not all_analytics and LEGACY_ANALYTICS_FILE.exists():
+        import json as _json
+        raw = _json.loads(LEGACY_ANALYTICS_FILE.read_text(encoding="utf-8"))
+        all_analytics = [
+            {
+                "id": r.get("urn", ""),
+                "linkedin_urn": r.get("urn", ""),
+                "title": r.get("name", ""),
+                "type": "unknown",
+                "impressions": r.get("impressions", 0),
+                "likes": r.get("likes", 0),
+                "comments": r.get("comments", 0),
+                "engagement_rate": round(
+                    (r.get("likes", 0) + r.get("comments", 0)) / r.get("impressions", 1) * 100, 2
+                ) if r.get("impressions") else 0.0,
+            }
+            for r in raw if r.get("urn")
+        ]
+
     all_posts = posts_store.all()
     published_posts = [p for p in all_posts if p["status"] == "published"]
 
     if not all_analytics:
         st.info("尚無數據。請先發布貼文並點擊「同步 LinkedIn 數據」。")
-        if LEGACY_ANALYTICS_FILE.exists():
-            if st.button("📥 匯入舊版數據"):
-                imported = _import_legacy_analytics()
-                st.success(f"已匯入 {imported} 筆")
-                st.rerun()
         return
 
     # ── Overview metrics ──
