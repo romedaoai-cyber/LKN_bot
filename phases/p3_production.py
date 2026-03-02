@@ -122,19 +122,44 @@ def render():
             key="p3_image_upload",
         )
         if uploaded_file:
-            import config as _cfg
-            image_path = _cfg.IMAGES_DIR / f"{post['id']}_{uploaded_file.name}"
-            image_path.write_bytes(uploaded_file.read())
-            post["image_path"] = str(image_path)
+            image_bytes = uploaded_file.read()
+            image_url = None
+
+            # Try Firebase Storage first
+            try:
+                from firebase_admin import storage as fb_storage
+                from db.firebase_db import firebase
+                if firebase.active:
+                    bucket = fb_storage.bucket()
+                    blob = bucket.blob(f"post_images/{post['id']}_{uploaded_file.name}")
+                    blob.upload_from_string(image_bytes, content_type=uploaded_file.type)
+                    blob.make_public()
+                    image_url = blob.public_url
+                    post["image_url"] = image_url
+                    post["image_path"] = None
+            except Exception as e:
+                st.warning(f"Firebase Storage 上傳失敗，改存本地：{e}")
+
+            # Fallback: local save
+            if not image_url:
+                import config as _cfg
+                image_path = _cfg.IMAGES_DIR / f"{post['id']}_{uploaded_file.name}"
+                image_path.write_bytes(image_bytes)
+                post["image_path"] = str(image_path)
+                post["image_url"] = None
+
             posts_store.save(post)
-            st.image(str(image_path), caption=uploaded_file.name, width=300)
+            st.image(image_bytes, caption=uploaded_file.name, width=300)
             st.success("圖片已儲存，發布時會一起上傳到 LinkedIn。")
-        elif post.get("image_path"):
+
+        elif post.get("image_url") or post.get("image_path"):
             import os
-            if os.path.exists(post["image_path"]):
-                st.image(post["image_path"], caption="目前圖片", width=300)
+            img_src = post.get("image_url") or post.get("image_path")
+            if img_src and (img_src.startswith("http") or os.path.exists(img_src)):
+                st.image(img_src, caption="目前圖片", width=300)
                 if st.button("🗑️ 移除圖片"):
                     post["image_path"] = None
+                    post["image_url"] = None
                     posts_store.save(post)
                     st.rerun()
 

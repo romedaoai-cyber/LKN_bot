@@ -9,6 +9,7 @@ from datetime import datetime
 
 import config
 from db.local_store import LocalStore
+from db.firebase_db import firebase
 from db.models import new_qa_record
 from linkedin.publisher import publish_post, check_token
 
@@ -19,7 +20,7 @@ qa_store = LocalStore(config.QA_RECORDS_FILE)
 def render():
     st.header("🚀 Phase 5｜發布 & 互動")
 
-    tabs = st.tabs(["📤 發布貼文", "💬 記錄 Q&A"])
+    tabs = st.tabs(["📤 發布貼文", "🤖 自動發布狀態", "💬 記錄 Q&A"])
 
     all_posts = posts_store.all()
 
@@ -80,8 +81,50 @@ def render():
                         if p.get("linkedin_urn"):
                             st.caption(f"URN: ...{p['linkedin_urn'][-8:]}")
 
-    # ── Tab 2: Q&A Capture ──
+    # ── Tab 2: Auto-Publish Status ──
     with tabs[1]:
+        st.subheader("🤖 Firebase 自動發布狀態")
+        st.caption("發文時間：每天 6:00 AM – 3:00 PM（美東時間 ET）")
+
+        if not firebase.active:
+            st.warning("⚠️ Firebase 未連線，自動發布功能未啟用。")
+        else:
+            col1, col2 = st.columns([3, 1])
+            with col2:
+                if st.button("🔄 重新整理"):
+                    st.rerun()
+
+            # Pending auto-publish
+            scheduled_fb = firebase.all("scheduled_posts")
+            pending = [p for p in scheduled_fb if p.get("status") == "scheduled"]
+            auto_done = [p for p in scheduled_fb if p.get("status") == "published" and p.get("auto_published")]
+
+            st.markdown(f"**待自動發布：{len(pending)} 篇**")
+            if pending:
+                for p in sorted(pending, key=lambda x: x.get("scheduled_at", "")):
+                    with st.container(border=True):
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            st.markdown(f"**{p.get('title', '未命名')}**")
+                        with col2:
+                            dt = p.get("scheduled_at", "")[:16].replace("T", " ")
+                            st.caption(f"📅 {dt}")
+
+            st.divider()
+            st.markdown(f"**已自動發布：{len(auto_done)} 篇**")
+            if auto_done:
+                for p in reversed(auto_done[-5:]):
+                    with st.container(border=True):
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            st.markdown(f"✅ **{p.get('title', '未命名')}**")
+                            st.caption(f"發布時間：{p.get('published_at', '')[:16].replace('T', ' ')}")
+                        with col2:
+                            if p.get("linkedin_urn"):
+                                st.caption(f"URN: ...{p['linkedin_urn'][-8:]}")
+
+    # ── Tab 3: Q&A Capture ──
+    with tabs[2]:
         st.subheader("記錄互動 Q&A")
         st.caption("從留言中找到有價值的問題，存入 Q&A 資料庫，再流回 Phase 1 成為靈感")
 

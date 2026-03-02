@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, date
 
 import config
 from db.local_store import LocalStore
+from db.firebase_db import firebase
 
 posts_store = LocalStore(config.POSTS_FILE)
 
@@ -74,7 +75,14 @@ def render():
                 selected_post["scheduled_at"] = scheduled_at
                 selected_post["status"] = "scheduled"
                 posts_store.save(selected_post)
-                st.success(f"已排程於 {schedule_date} {schedule_time}")
+
+                # Sync to Firestore for auto-publish Cloud Function
+                firebase.save("scheduled_posts", selected_post)
+                if firebase.active:
+                    st.success(f"✅ 已排程於 {schedule_date} {schedule_time}，並同步到 Firebase（將自動發布）")
+                else:
+                    st.success(f"已排程於 {schedule_date} {schedule_time}")
+                    st.warning("⚠️ Firebase 未連線，自動發布功能不可用")
                 st.rerun()
 
         # Calendar view
