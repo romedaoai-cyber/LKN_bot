@@ -4,6 +4,7 @@ LinkedIn Content Manager v2
 
 Run: streamlit run streamlit_app.py
 """
+import traceback
 import streamlit as st
 
 st.set_page_config(
@@ -13,14 +14,20 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+try:
+    import config
+    from db.local_store import LocalStore
+    from db.models import default_brand_profile
+except Exception as e:
+    st.error(f"❌ 啟動錯誤（import）：{e}")
+    st.code(traceback.format_exc())
+    st.stop()
+
 
 def _render_brand_settings():
     st.header("⚙️ 品牌設定")
     st.caption("定義你的品牌聲音，AI 產文時會自動套用")
 
-    import config
-    from db.local_store import LocalStore
-    from db.models import default_brand_profile
     from datetime import datetime
 
     brand_store = LocalStore(config.BRAND_PROFILE_FILE)
@@ -69,8 +76,6 @@ with st.sidebar:
 
     # Quick stats
     try:
-        import config
-        from db.local_store import LocalStore
         posts_store = LocalStore(config.POSTS_FILE)
         inspirations_store = LocalStore(config.INSPIRATIONS_FILE)
         all_posts = posts_store.all()
@@ -87,29 +92,34 @@ with st.sidebar:
 # ── Route to phase ──
 phase_key = PHASES[selected]
 
-if phase_key == "p1":
-    from phases.p1_inspiration import render
-    render()
+try:
+    if phase_key == "p1":
+        from phases.p1_inspiration import render
+        render()
 
-elif phase_key == "p2":
-    from phases.p2_review import render
-    render()
+    elif phase_key == "p2":
+        from phases.p2_review import render
+        render()
 
-elif phase_key == "p3":
-    from phases.p3_production import render
-    render()
+    elif phase_key == "p3":
+        from phases.p3_production import render
+        render()
 
-elif phase_key == "p4":
-    from phases.p4_scheduling import render
-    render()
+    elif phase_key == "p4":
+        from phases.p4_scheduling import render
+        render()
 
-elif phase_key == "p5":
-    from phases.p5_publishing import render
-    render()
+    elif phase_key == "p5":
+        from phases.p5_publishing import render
+        render()
 
-elif phase_key == "p6":
-    from phases.p6_analytics import render
-    render()
+    elif phase_key == "p6":
+        from phases.p6_analytics import render
+        render()
 
-elif phase_key == "brand":
-    _render_brand_settings()
+    elif phase_key == "brand":
+        _render_brand_settings()
+
+except Exception as e:
+    st.error(f"❌ 頁面載入錯誤：{e}")
+    st.code(traceback.format_exc())
