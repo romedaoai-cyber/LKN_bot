@@ -6,7 +6,7 @@ class AudiencePersonaSkill(BaseSkill):
     role = "受眾痛點聚焦"
     emoji = "🎯"
     description = "深入分析目標受眾的痛點、渴望與情緒觸發點"
-    use_claude = True  # Claude — 需要深度心理洞察
+    use_claude = False  # Gemini
 
     system_prompt = """你是一位專業的受眾行為分析師，擅長洞察 LinkedIn 專業人士的心理與需求。
 

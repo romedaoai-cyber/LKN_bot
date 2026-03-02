@@ -6,7 +6,7 @@ class MarketStrategistSkill(BaseSkill):
     role = "市場數據佐證"
     emoji = "📊"
     description = "提供市場規模數據、產業趨勢和商業佐證，讓貼文更有說服力"
-    use_claude = True  # Claude — 需要深度分析
+    use_claude = False  # Gemini
 
     system_prompt = """你是一位擁有豐富全球市場知識的策略師，熟悉各產業的數據與趨勢。
 

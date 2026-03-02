@@ -6,7 +6,7 @@ class CrisisDirectorSkill(BaseSkill):
     role = "發文風險預判"
     emoji = "🛡️"
     description = "預判貼文可能引發的爭議、誤解或負面反應，給出風險評級和建議"
-    use_claude = True  # Claude — 需要細膩的風險推理
+    use_claude = False  # Gemini
 
     system_prompt = """你是一位資深公關危機顧問，專門為 LinkedIn 內容做風險評估。
 
