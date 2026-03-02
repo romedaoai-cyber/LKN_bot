@@ -6,7 +6,7 @@ class CopyArchitectSkill(BaseSkill):
     role = "文章結構設計"
     emoji = "🏗️"
     description = "設計最適合這個主題的文章骨架和段落結構"
-    use_claude = True  # Claude — 架構設計需要邏輯深度
+    use_claude = False  # Gemini
 
     system_prompt = """你是一位專業的文案架構師，擅長為 LinkedIn 長文設計清晰、有說服力的結構。
 

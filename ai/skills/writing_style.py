@@ -6,7 +6,7 @@ class WritingStyleSkill(BaseSkill):
     role = "核心寫作技師"
     emoji = "✍️"
     description = "根據品牌語氣與所有輔助 Skills 的洞察，產出完整 LinkedIn 貼文"
-    use_claude = True
+    use_claude = False  # Gemini
 
     system_prompt = """你是一位專業的 LinkedIn 內容寫作師，擅長將複雜的商業洞察轉化為易讀、有溫度的貼文。
 
