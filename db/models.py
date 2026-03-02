@@ -84,6 +84,7 @@ def default_brand_profile() -> dict:
         "name": "",
         "tone": "",
         "target_audience": "",
+        "product_knowledge": "",
         "topics": [],
         "style_guide": "",
         "color_palette": [],

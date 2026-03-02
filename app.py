@@ -29,6 +29,8 @@ def _render_brand_settings():
     name = st.text_input("品牌/個人名稱", value=profile.get("name", ""))
     tone = st.text_area("語氣描述", value=profile.get("tone", ""), height=80,
                         placeholder="例：專業但親切，像在和聰明朋友對話")
+    product_knowledge = st.text_area("產品知識", value=profile.get("product_knowledge", ""), height=120,
+        placeholder="描述你的產品/服務：核心功能、解決的問題、差異化優勢、定價等。AI 寫文前會先讀這段。")
     target_audience = st.text_area("目標受眾", value=profile.get("target_audience", ""), height=80,
                                    placeholder="例：B2B SaaS 行銷主管、新創創辦人")
     topics_raw = st.text_input("擅長話題（逗號分隔）",
@@ -41,6 +43,7 @@ def _render_brand_settings():
         profile.update({
             "name": name,
             "tone": tone,
+            "product_knowledge": product_knowledge,
             "target_audience": target_audience,
             "topics": [t.strip() for t in topics_raw.split(",") if t.strip()],
             "style_guide": style_guide,

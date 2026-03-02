@@ -44,6 +44,8 @@ class BaseSkill:
         if context.get("brand_profile"):
             bp = context["brand_profile"]
             parts.append(f"品牌資訊：{bp.get('name', '')} — 語氣：{bp.get('tone', '')} — 受眾：{bp.get('target_audience', '')}")
+            if bp.get("product_knowledge"):
+                parts.append(f"產品知識：{bp.get('product_knowledge', '')}")
         if context.get("inspiration"):
             parts.append(f"靈感素材：{context['inspiration']}")
         if context.get("skill_results"):
