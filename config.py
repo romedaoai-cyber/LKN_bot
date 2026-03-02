@@ -42,6 +42,9 @@ FIREBASE_SERVICE_ACCOUNT = get_env("FIREBASE_SERVICE_ACCOUNT")
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
+IMAGES_DIR = DATA_DIR / "images"
+IMAGES_DIR.mkdir(exist_ok=True)
+
 INSPIRATIONS_FILE = DATA_DIR / "inspirations.json"
 QA_RECORDS_FILE = DATA_DIR / "qa_records.json"
 BRAND_PROFILE_FILE = DATA_DIR / "brand_profile.json"

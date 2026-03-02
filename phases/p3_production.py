@@ -113,6 +113,31 @@ def render():
             key="p3_edited_content",
         )
 
+        # ── Image Upload ──
+        st.divider()
+        st.subheader("🖼️ 附加圖片")
+        uploaded_file = st.file_uploader(
+            "上傳圖片（選填）",
+            type=["jpg", "jpeg", "png", "gif"],
+            key="p3_image_upload",
+        )
+        if uploaded_file:
+            import config as _cfg
+            image_path = _cfg.IMAGES_DIR / f"{post['id']}_{uploaded_file.name}"
+            image_path.write_bytes(uploaded_file.read())
+            post["image_path"] = str(image_path)
+            posts_store.save(post)
+            st.image(str(image_path), caption=uploaded_file.name, width=300)
+            st.success("圖片已儲存，發布時會一起上傳到 LinkedIn。")
+        elif post.get("image_path"):
+            import os
+            if os.path.exists(post["image_path"]):
+                st.image(post["image_path"], caption="目前圖片", width=300)
+                if st.button("🗑️ 移除圖片"):
+                    post["image_path"] = None
+                    posts_store.save(post)
+                    st.rerun()
+
         # ── Feedback & Rewrite ──
         st.divider()
         st.subheader("💬 反饋給 AI")
