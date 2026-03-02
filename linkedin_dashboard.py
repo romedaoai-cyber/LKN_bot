@@ -12,9 +12,6 @@ import base64
 import pandas as pd
 from firebase_manager import fm
 
-# Initialize Firebase
-fm.initialize()
-
 # ──────────────────────────────────────────────
 # Configuration
 # ──────────────────────────────────────────────

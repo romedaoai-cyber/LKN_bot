@@ -12,6 +12,8 @@ class FirebaseManager:
 
     def initialize(self):
         """Initialize Firebase with local key or environment variables (for Cloud)"""
+        if self.db is not None:
+            return True
         try:
             if not firebase_admin._apps:
                 # 1. Try local file
@@ -27,7 +29,7 @@ class FirebaseManager:
                 else:
                     print("⚠️ Firebase credentials not found. Local file mode will be used.")
                     return False
-            
+
             self.db = firestore.client()
             return True
         except Exception as e:
