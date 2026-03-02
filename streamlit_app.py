@@ -1,2 +1,2 @@
-# Entry point for Streamlit Cloud (Main file path: streamlit_app.py)
-from app import *
+import runpy
+runpy.run_path("app.py", run_name="__main__")
