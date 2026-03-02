@@ -21,10 +21,10 @@ db = firestore.client()
 LINKEDIN_API_BASE = "https://api.linkedin.com"
 LINKEDIN_VERSION = "202601"
 
-# Publishing window: 6am – 3pm Eastern Time (North America)
-PUBLISH_TZ = pytz.timezone("America/New_York")
-PUBLISH_HOUR_START = 6   # 6:00 AM ET
-PUBLISH_HOUR_END = 15    # 3:00 PM ET
+# Publishing window: 6am – 3pm Vancouver Time (Pacific Time)
+PUBLISH_TZ = pytz.timezone("America/Vancouver")
+PUBLISH_HOUR_START = 6   # 6:00 AM PT
+PUBLISH_HOUR_END = 15    # 3:00 PM PT
 
 
 def _within_publish_window() -> bool:
@@ -143,7 +143,7 @@ def auto_publish(event: pubsub_fn.CloudEvent) -> None:
     # Check publishing window: 6am–3pm Eastern Time
     if not _within_publish_window():
         now_et = datetime.now(PUBLISH_TZ)
-        print(f"[auto_publish] Outside publish window ({now_et.strftime('%H:%M')} ET). Skipping.")
+        print(f"[auto_publish] Outside publish window ({now_et.strftime('%H:%M')} PT). Skipping.")
         return
 
     # Query posts: status == "scheduled" and scheduled_at <= now

@@ -84,7 +84,7 @@ def render():
     # ── Tab 2: Auto-Publish Status ──
     with tabs[1]:
         st.subheader("🤖 Firebase 自動發布狀態")
-        st.caption("發文時間：每天 6:00 AM – 3:00 PM（美東時間 ET）")
+        st.caption("發文時間：每天 6:00 AM – 3:00 PM（溫哥華時間 PT）")
 
         if not firebase.active:
             st.warning("⚠️ Firebase 未連線，自動發布功能未啟用。")

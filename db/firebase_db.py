@@ -36,7 +36,14 @@ class FirebaseDB:
                     cred = credentials.Certificate(info)
                 else:
                     return
-                firebase_admin.initialize_app(cred)
+                # Derive storage bucket: env var > project_id.appspot.com
+                project_id = getattr(cred, "project_id", None)
+                bucket_name = os.environ.get(
+                    "FIREBASE_STORAGE_BUCKET",
+                    f"{project_id}.appspot.com" if project_id else "",
+                )
+                app_options = {"storageBucket": bucket_name} if bucket_name else {}
+                firebase_admin.initialize_app(cred, app_options)
             self.db = firestore.client()
         except Exception as e:
             print(f"Firebase init error: {e}")
