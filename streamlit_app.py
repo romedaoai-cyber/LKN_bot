@@ -1,2 +1,3 @@
-import runpy
-runpy.run_path("app.py", run_name="__main__")
+import streamlit as st
+st.title("✅ App is working!")
+st.write("Hello from LinkedIn Content Manager")
