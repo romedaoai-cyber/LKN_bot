@@ -11,7 +11,7 @@ import streamlit as st
 import config
 from db.local_store import LocalStore
 from db.models import new_post
-from ai.skill_engine import OPTIONAL_SKILLS, run_skills
+from ai.skill_engine import OPTIONAL_SKILLS, run_skills, rewrite_with_feedback
 
 posts_store = LocalStore(config.POSTS_FILE)
 brand_store = LocalStore(config.BRAND_PROFILE_FILE)
@@ -113,6 +113,27 @@ def render():
             key="p3_edited_content",
         )
 
+        # ── Feedback & Rewrite ──
+        st.divider()
+        st.subheader("💬 反饋給 AI")
+        feedback_text = st.text_area(
+            "告訴 AI 哪裡需要改（英文或中文都可以）",
+            placeholder="e.g. Make the hook more provocative / 語氣太正式，改輕鬆一點 / Add more specific data in the middle",
+            height=100,
+            key="p3_feedback",
+        )
+        if st.button("✨ 根據反饋重寫", disabled=not feedback_text.strip()):
+            with st.spinner("AI 根據反饋重寫中..."):
+                new_post_content = rewrite_with_feedback(
+                    current_post=edited_content,
+                    feedback=feedback_text,
+                    brand_profile=brand_profile,
+                )
+            st.session_state["p3_result"]["post"] = new_post_content
+            st.session_state.pop("p3_feedback", None)
+            st.rerun()
+
+        st.divider()
         col1, col2, col3 = st.columns(3)
         with col1:
             if st.button("💾 存為草稿"):

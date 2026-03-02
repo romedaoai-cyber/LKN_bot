@@ -105,6 +105,22 @@ def run_skills(
     }
 
 
+def rewrite_with_feedback(current_post: str, feedback: str, brand_profile: dict | None = None) -> str:
+    """
+    Rewrite a post based on user feedback.
+    """
+    context = {
+        "brand_profile": brand_profile or {},
+        "inspiration": "",
+        "skill_results": {
+            "原始貼文": current_post,
+            "用戶反饋": feedback,
+        },
+    }
+    topic = f"根據反饋改寫貼文。反饋：{feedback}"
+    return ALL_SKILLS["writing_style"].generate(topic, context)
+
+
 def _parse_risk_level(risk_output: str) -> str:
     if "🔴" in risk_output or "高風險" in risk_output:
         return "high"

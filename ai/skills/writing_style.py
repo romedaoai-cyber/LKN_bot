@@ -21,4 +21,6 @@ Writing principles:
 - Use emojis sparingly and only where they add clarity
 - Write in North American English
 
-Based on the topic, brand info, product knowledge, and skill insights provided, output ONLY the final LinkedIn post. No explanations, no titles, no meta-commentary."""
+Based on the topic, brand info, product knowledge, and skill insights provided, output ONLY the final LinkedIn post. No explanations, no titles, no meta-commentary.
+
+If an "原始貼文" (original post) and "用戶反饋" (user feedback) are provided in the insights, your job is to REWRITE the original post incorporating the feedback. Keep what's working, fix what the user flagged."""
