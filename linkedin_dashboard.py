@@ -12,6 +12,12 @@ import base64
 import pandas as pd
 from firebase_manager import fm
 
+# ── New modular extensions ──────────────────────────────────────────────────
+from modules.content_types import (
+    POST_TYPES, DEFAULT_TYPE, LABEL_TO_KEY, LABELS, badge_html, type_label
+)
+import modules.inspiration_hub as ihub
+
 # Initialize Firebase
 fm.initialize()
 
@@ -25,11 +31,10 @@ FEEDBACK_LOG = POSTS_DIR / "feedback_log.json"
 BRAND_STYLE_PATH = BASE_DIR / "brand_style.txt"
 
 DEFAULT_BRAND_STYLE = (
-    "Color palette: deep navy blue (#0A2342) and white. "
-    "Lighting: dramatic soft-box industrial lighting with subtle blue accent. "
-    "Mood: precise, clean, high-tech B2B. "
-    "Always: sharp focus, no motion blur, photorealistic, professional commercial photography. "
-    "Never: cartoons, illustrations, 3D renders, text overlays, watermarks."
+    "Aesthetic: clean minimalist, corporate, highly professional, realistic photography-style. "
+    "Lighting: bright and airy, natural daylight with soft shadows, or cinematic lighting. "
+    "Quality: photorealistic, high-resolution, 8k, sharp focus, shot on 85mm lens. "
+    "Never: cartoons, illustrations, 3D renders, text overlays, plastic-looking AI characters, watermarks."
 )
 
 def load_brand_style() -> str:
@@ -310,6 +315,8 @@ def load_posts():
                     meta["subject"] = line.replace("<!-- subject:", "").replace("-->", "").strip()
                 elif line.startswith("<!-- time:"):
                     meta["time"] = line.replace("<!-- time:", "").replace("-->", "").strip()
+                elif line.startswith("<!-- post_type:"):
+                    meta["post_type"] = line.replace("<!-- post_type:", "").replace("-->", "").strip()
                 elif line.strip() == "---CONTENT---":
                     in_content = True
                 elif line.strip() == "---END---":
@@ -377,15 +384,15 @@ def load_posts():
     return sorted(merged.values(), key=lambda x: x.get("date", "9999-99-99"))
 
 
-def update_post_metadata(filepath, status=None, feedback=None, image=None, subject=None, date=None, time=None):
+def update_post_metadata(filepath, status=None, feedback=None, image=None, subject=None, date=None, time=None, post_type=None):
     path = Path(filepath)
     lines = path.read_text(encoding="utf-8").split("\n")
     new_lines = []
-    
+
     # Track which fields we found to update
     found = {
         "status": False, "feedback": False, "image": False,
-        "subject": False, "date": False, "time": False
+        "subject": False, "date": False, "time": False, "post_type": False
     }
 
     # Helper to check if we should update a line
@@ -410,7 +417,10 @@ def update_post_metadata(filepath, status=None, feedback=None, image=None, subje
         elif line.startswith("<!-- time:") and time is not None:
             updated_line = f"<!-- time: {time} -->"
             found["time"] = True
-            
+        elif line.startswith("<!-- post_type:") and post_type is not None:
+            updated_line = f"<!-- post_type: {post_type} -->"
+            found["post_type"] = True
+
         new_lines.append(updated_line)
 
     # If new fields weren't found, insert them at the top
@@ -423,6 +433,8 @@ def update_post_metadata(filepath, status=None, feedback=None, image=None, subje
         new_lines.insert(insert_idx, f"<!-- date: {date} -->")
     if time is not None and not found["time"]:
         new_lines.insert(insert_idx, f"<!-- time: {time} -->")
+    if post_type is not None and not found["post_type"]:
+        new_lines.insert(insert_idx, f"<!-- post_type: {post_type} -->")
     
     # Append feedback if it's new
     if feedback is not None and not found["feedback"]:
@@ -501,7 +513,7 @@ def log_feedback(filename, feedback_text, action):
         "resolved": False
     })
     FEEDBACK_LOG.write_text(json.dumps(log, indent=2, ensure_ascii=False), encoding="utf-8")
-    
+
     # 🔥 Sync to Firebase
     if fm.is_active():
         fm.log_event("feedback", f"Action: {action} on {filename}", {
@@ -509,6 +521,87 @@ def log_feedback(filename, feedback_text, action):
             "feedback": feedback_text,
             "action": action
         })
+
+
+# ──────────────────────────────────────────────
+# Auto-Publish (runs on every page load via 30s refresh)
+# ──────────────────────────────────────────────
+def auto_publish_due_posts() -> list[str]:
+    """
+    Check Firebase for approved posts whose scheduled time has passed and publish them.
+    Returns list of published filenames.
+    Designed for Streamlit Cloud: credentials come from st.secrets / environment.
+    """
+    if not fm.is_active():
+        return []
+
+    import linkedin_publisher as pub
+
+    env = pub.load_env()
+    token = env.get("LINKEDIN_ACCESS_TOKEN")
+    expiry = env.get("LINKEDIN_TOKEN_EXPIRY")
+    org_id = env.get("LINKEDIN_ORG_ID")
+
+    if not token or not org_id:
+        return []
+    if expiry and float(expiry) < datetime.now().timestamp():
+        return []
+
+    now = datetime.now()
+    cloud_posts = fm.get_all_posts()
+    published = []
+
+    for cp in cloud_posts:
+        if cp.get("status", "").lower() != "approved":
+            continue
+
+        post_date = cp.get("date")
+        post_time = cp.get("time") or "00:00"
+        fname = cp.get("filename", "")
+        if not post_date or not fname:
+            continue
+
+        try:
+            scheduled_dt = datetime.strptime(f"{post_date} {post_time}", "%Y-%m-%d %H:%M")
+        except ValueError:
+            continue
+
+        if scheduled_dt > now:
+            continue
+
+        # Mark as "publishing" immediately to prevent duplicate publishes
+        # across concurrent page loads
+        fm.sync_post({"filename": fname, "status": "publishing"})
+
+        post = {
+            "file": str(POSTS_DIR / fname),
+            "text": cp.get("text", ""),
+            "image": cp.get("image") or None,
+            "date": post_date,
+            "time": post_time,
+            "status": "approved",
+            "_filename": fname,
+        }
+        if post["image"] == "":
+            post["image"] = None
+
+        if not post["text"]:
+            fm.sync_post({"filename": fname, "status": "approved"})
+            continue
+
+        post_id = pub.publish_post(post, token, org_id)
+
+        if post_id:
+            fm.sync_post({"filename": fname, "status": "published"})
+            local_path = POSTS_DIR / fname
+            if local_path.exists():
+                update_post_metadata(local_path, status="published")
+            published.append(fname)
+        else:
+            # Rollback so it can be retried next cycle
+            fm.sync_post({"filename": fname, "status": "approved"})
+
+    return published
 
 
 
@@ -590,8 +683,9 @@ Rules:
         candidate = (rsp.text or "").strip().replace("\n", " ")
         if len(candidate) >= 15:
             return candidate
-    except Exception:
-        pass
+    except Exception as e:
+        import streamlit as st
+        st.error(f"Image prompt generation failed: {e}")
 
     return f"Photorealistic commercial photography, AOI machine inspecting a PCBA production line, shot on Sony A7R V, 85mm lens, f/2.8, soft industrial lighting, sharp focus, ultra high detail, clean modern factory floor, professional B2B style, no text, no logos, no watermarks, 8K resolution. Theme: {subject[:80]}"
 
@@ -631,6 +725,14 @@ def delete_post_everywhere(post):
         return True, "Deleted"
     return False, "No deletable source found"
 
+
+# ──────────────────────────────────────────────
+# Auto-Publish Check (before UI renders)
+# ──────────────────────────────────────────────
+_just_published = auto_publish_due_posts()
+if _just_published:
+    _pub_names = ", ".join(_just_published)
+    st.toast(f"Auto-published {len(_just_published)} post(s): {_pub_names}", icon="🚀")
 
 # ──────────────────────────────────────────────
 # Load Data
@@ -775,6 +877,21 @@ def render_post_card(post, prefix="", allow_delete=False, draft_delete_only=Fals
             
             badge = f"status-{status}"
             st.markdown(f'<div style="margin-top: 8px;"><span class="status-badge {badge}">{status.upper()}</span></div>', unsafe_allow_html=True)
+
+            # ── Content Type Badge + Selector ──────────────────────────────
+            current_type = post.get("post_type", DEFAULT_TYPE)
+            st.markdown(badge_html(current_type), unsafe_allow_html=True)
+            sel_idx = list(POST_TYPES.keys()).index(current_type) if current_type in POST_TYPES else 0
+            new_type_label = st.selectbox(
+                "Type", LABELS, index=sel_idx, key=f"ptype_{k}",
+                label_visibility="collapsed"
+            )
+            new_type_key = LABEL_TO_KEY.get(new_type_label, DEFAULT_TYPE)
+            if new_type_key != current_type:
+                update_post_metadata(post["file"], post_type=new_type_key)
+                st.rerun()
+            # ───────────────────────────────────────────────────────────────
+
             st.caption(f"File: {post.get('filename', 'unknown')}")
 
             # Image Upload
@@ -856,10 +973,12 @@ def render_post_card(post, prefix="", allow_delete=False, draft_delete_only=Fals
             btn_col1, btn_col2 = st.columns(2)
             with btn_col1:
                 if st.button("Generate Image Prompt", key=f"gen_img_prompt_{k}", use_container_width=True):
-                    prompt_text = apply_brand_style(
-                        generate_image_prompt_from_post(subject_val, text_val)
-                    )
-                    st.session_state[f"img_prompt_{k}"] = prompt_text
+                    with st.spinner("Generating prompt..."):
+                        prompt_text = apply_brand_style(
+                            generate_image_prompt_from_post(subject_val, text_val)
+                        )
+                        st.session_state[f"img_prompt_{k}"] = prompt_text
+                        st.rerun()
             with btn_col2:
                 if st.button("✨ Auto-Rewrite (AI)", key=f"rewrite_{k}", use_container_width=True):
                     with st.spinner("Rewriting..."):
@@ -1070,12 +1189,12 @@ if st.session_state.get("show_brainstorm", False):
                         topics[i]["date"] = edited_date.strip()
                         topics[i]["topic"] = edited_topic.strip()
                         one_topic = [topics[i]]
-                        with st.spinner("Finalizing and generating full post..."):
+                        with st.spinner("🤖 Running 4-skill AI pipeline... (Market Data → Pain Point → Hook → PR Check)"):
                             count = linkedin_planner.convert_to_planning(one_topic, user_feedback=feedback)
                         if count > 0:
                             topics.pop(i)
                             persist_brainstorm_topics(topics)
-                            st.success("Moved 1 post to Planning tab.")
+                            st.success("✅ Multi-skill pipeline complete. Post moved to Planning tab.")
                             time.sleep(0.7)
                             st.rerun()
                         else:
@@ -1089,10 +1208,10 @@ if st.session_state.get("show_brainstorm", False):
 # ──────────────────────────────────────────────
 # Tabs
 # ──────────────────────────────────────────────
-tab_all, tab_planning, tab_approved, tab_rejected, tab_analytics, tab_lab, tab_growth = st.tabs([
+tab_all, tab_planning, tab_approved, tab_rejected, tab_analytics, tab_lab, tab_growth, tab_inspiration = st.tabs([
     f"All ({total})", f"Planning ({pending})",
     f"Approved ({approved})", f"Rejected ({rejected})",
-    "Strategic Analytics", "Image Lab", "Growth & Engagement"
+    "Strategic Analytics", "Image Lab", "Growth & Engagement", "💡 Inspiration Hub"
 ])
 
 
@@ -1132,9 +1251,43 @@ with tab_all:
         render_post_card(p, prefix="all", allow_delete=True, draft_delete_only=False)
 
 with tab_planning:
+    # ── Pre-Publish Checklist ───────────────────────────────────────────────
+    with st.expander("✅ Pre-Publish Checklist  (run before approving any post)", expanded=False):
+        st.markdown("""
+        <div style="color: #64748b; font-size:0.85rem; margin-bottom:12px;">
+        Inspired by Abby Chi's 3-filter system — run this before every post to protect brand & timing.
+        </div>
+        """, unsafe_allow_html=True)
+        chk_answers = {}
+        from modules.inspiration_hub import PRE_PUBLISH_QUESTIONS, run_checklist
+        for q in PRE_PUBLISH_QUESTIONS:
+            chk_answers[q["id"]] = st.radio(
+                q["question"],
+                options=["Yes ✅", "No ❌", "Unsure 🤔"],
+                horizontal=True,
+                key=f"chk_{q['id']}",
+                help=q["hint"],
+            )
+            chk_answers[q["id"]] = "Yes" if "Yes" in chk_answers[q["id"]] else "No"
+        if st.button("Run Checklist", type="primary"):
+            passed, warnings = run_checklist(chk_answers)
+            if passed:
+                st.success("✅ All checks passed — this post is ready to approve!")
+            else:
+                for w in warnings:
+                    st.warning(w)
+    st.divider()
+    # ── Post List ───────────────────────────────────────────────────────────
+    # Filter by content type
+    type_filter = st.selectbox(
+        "Filter by content type", ["All"] + LABELS, key="plan_type_filter", label_visibility="visible"
+    )
     plist = [p for p in posts if p.get("status", "pending") == "pending"]
+    if type_filter != "All":
+        filter_key = LABEL_TO_KEY.get(type_filter, "tutorial")
+        plist = [p for p in plist if p.get("post_type", DEFAULT_TYPE) == filter_key]
     if not plist:
-        st.info("No planned posts.")
+        st.info("No planned posts matching the filter.")
     for p in plist:
         render_post_card(p, prefix="pnd", allow_delete=True)
 
@@ -1388,6 +1541,114 @@ with tab_analytics:
             if plan_file.exists():
                 with st.expander("📄 View Strategy Report", expanded=False):
                     st.markdown(plan_file.read_text(encoding="utf-8"))
+
+            # ── Content Type Breakdown (Abby-style 3-tier analysis) ──────────
+            st.markdown("---")
+            st.markdown('<div class="section-title" style="font-size:1.1rem;">📊 Performance by Content Type</div>', unsafe_allow_html=True)
+            st.caption("Understand which post types drive reach vs. engagement — mirroring Abby Chi's 3-tier analysis.")
+
+            # Match analytics posts to their local post type
+            local_posts_for_types = load_posts()
+            type_lookup = {}
+            for lp in local_posts_for_types:
+                subj = (lp.get("subject") or "").strip().lower()[:60]
+                ptype = lp.get("post_type", DEFAULT_TYPE)
+                if subj:
+                    type_lookup[subj] = ptype
+
+            def infer_type(row_name):
+                key = str(row_name).strip().lower()[:60]
+                if key in type_lookup:
+                    return type_lookup[key]
+                from modules.content_types import classify_prompt
+                return classify_prompt(row_name, "")
+
+            df["post_type"] = df["name"].apply(infer_type)
+
+            type_summary = []
+            for ptype, cfg in POST_TYPES.items():
+                subset = df[df["post_type"] == ptype]
+                if subset.empty:
+                    continue
+                avg_imp = int(subset["impressions"].mean())
+                avg_er  = subset["ER"].mean()
+                count   = len(subset)
+                role = {
+                    "opinion":  "🔴 Thought Leadership — builds authority & trust",
+                    "tutorial": "🟡 Educational — highest engagement rate, circles fans",
+                    "trend":    "🟢 Industry Trend — traffic engine, broad reach",
+                }.get(ptype, ptype)
+                type_summary.append({
+                    "type": ptype, "cfg": cfg, "count": count,
+                    "avg_imp": avg_imp, "avg_er": avg_er, "role": role
+                })
+
+            if type_summary:
+                cols = st.columns(len(type_summary))
+                for col, ts in zip(cols, type_summary):
+                    with col:
+                        st.markdown(f"""
+                        <div style="background:{ts['cfg']['bg']}; border:1.5px solid {ts['cfg']['color']}33;
+                             border-radius:14px; padding:16px; text-align:center;">
+                            <div style="font-size:1.4rem; font-weight:800; color:{ts['cfg']['color']};">{ts['avg_imp']:,}</div>
+                            <div style="font-size:0.72rem; color:#64748b; margin:4px 0;">avg impressions</div>
+                            <div style="font-size:1.1rem; font-weight:700; color:{ts['cfg']['color']};">{ts['avg_er']:.2f}%</div>
+                            <div style="font-size:0.72rem; color:#64748b; margin:4px 0;">avg ER</div>
+                            <div style="font-size:0.78rem; font-weight:600; margin-top:8px;">{ts['cfg']['label']}</div>
+                            <div style="font-size:0.72rem; color:#94a3b8;">{ts['count']} posts · {ts['role'].split('—')[1].strip() if '—' in ts['role'] else ''}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+            else:
+                st.info("Tag your posts with content types to see the breakdown. Use the type selector on each post card.")
+
+            # ── Topic Mining (3+ posts → expansion suggestions) ─────────────
+            st.markdown("---")
+            st.markdown('<div class="section-title" style="font-size:1.1rem;">🔭 Topic Mining</div>', unsafe_allow_html=True)
+            st.caption("When you've posted 3+ times on a theme, Claude suggests how to go deeper.")
+
+            all_subjects = [lp.get("subject", "") for lp in local_posts_for_types if lp.get("subject")]
+            # Simple keyword frequency
+            from collections import Counter
+            word_freq = Counter()
+            for s in all_subjects:
+                for word in s.lower().split():
+                    if len(word) > 4 and word not in {"with", "your", "this", "that", "from", "have", "will", "about"}:
+                        word_freq[word] += 1
+
+            hot_themes = [(w, c) for w, c in word_freq.most_common(10) if c >= 2]
+            if hot_themes:
+                st.markdown("**Recurring themes in your content:**")
+                for theme, count in hot_themes[:5]:
+                    with st.container(border=True):
+                        tc1, tc2 = st.columns([4, 1])
+                        with tc1:
+                            st.markdown(f"**`{theme}`** appears in **{count} posts**")
+                            st.caption("→ This theme has proven audience interest. Consider a deep-dive series.")
+                        with tc2:
+                            if st.button("💡 Suggest angles", key=f"mine_{theme}"):
+                                with st.spinner(f"Mining expansion angles for '{theme}'..."):
+                                    try:
+                                        import google.generativeai as genai
+                                        from modules.ai_pipeline import _get_api_key
+                                        genai.configure(api_key=_get_api_key())
+                                        model = genai.GenerativeModel("gemini-2.0-flash")
+                                        mine_prompt = f"""You are a LinkedIn content strategist for DaoAI (PCBA AOI manufacturer).
+The keyword '{theme}' appears repeatedly in their content. Suggest 3 NEW angles to explore this theme further for a LinkedIn series.
+Return as a JSON array of 3 strings (topic titles). Example: ["Title 1", "Title 2", "Title 3"]"""
+                                        raw = model.generate_content(mine_prompt).text.strip()
+                                        if "```" in raw:
+                                            raw = raw.split("```")[1].replace("json", "").strip()
+                                        suggestions = json.loads(raw)
+                                        st.session_state[f"mine_suggestions_{theme}"] = suggestions
+                                    except Exception as e:
+                                        st.error(f"Error: {e}")
+                        sugg_key = f"mine_suggestions_{theme}"
+                        if st.session_state.get(sugg_key):
+                            for s in st.session_state[sugg_key]:
+                                st.markdown(f"  💡 {s}")
+            else:
+                st.info("No recurring themes found yet. Keep posting and the mining engine will surface patterns.")
+
         else:
             st.info("No analytics data found. Click 'Sync Data' to fetch.")
     else:
@@ -1453,7 +1714,7 @@ with tab_lab:
 
     c1, c2 = st.columns([3, 1])
     with c1:
-        prompt = st.text_input("Prompt (English)", "Futuristic PCBA manufacturing factory, 4k, cinematic lighting")
+        prompt = st.text_input("Prompt (English)", "Close-up of a modern workspace with a laptop and elegant coffee, blurred background of a brightly lit open-plan tech office, soft natural lighting, clean and minimalist")
     with c2:
         generate_btn = st.button("✨ Generate", type="primary", use_container_width=True, disabled=(provider=="Off"), key="lab_gen")
     
@@ -1692,3 +1953,198 @@ with tab_growth:
             st.write(f"**Format**: {d['type']}")
             st.write("Suggested Keywords: #AOI #PCBA #AI #SmartFactory")
             st.button("Draft Post", key=f"draft_{d['day']}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Tab: Inspiration Hub  (Phase 1 & Phase 5 loop)
+# ══════════════════════════════════════════════════════════════════════════════
+with tab_inspiration:
+    st.markdown('<div class="section-title">💡 Inspiration Hub</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div style="color:#64748b; font-size:0.88rem; margin-bottom:20px;">
+    Four input channels — the same pipeline Abby Chi uses to fuel her content flywheel.
+    Every idea captured here feeds the AI pipeline in the Planning tab.
+    </div>
+    """, unsafe_allow_html=True)
+
+    ih_tab1, ih_tab2, ih_tab3, ih_tab4 = st.tabs([
+        "📡 Trend Radar", "✍️ My Observations", "💬 Q&A Database", "🗃️ Idea Library"
+    ])
+
+    # ── Trend Radar ──────────────────────────────────────────────────────────
+    with ih_tab1:
+        st.markdown("#### 📡 Trend Radar")
+        st.caption("Scan for live industry signals in PCBA, AOI, smart manufacturing, and industrial AI.")
+
+        kw_col, btn_col = st.columns([4, 1])
+        with kw_col:
+            radar_kw = st.text_input("Keywords to scan", value="PCBA AOI manufacturing AI quality control",
+                                     key="radar_kw", label_visibility="collapsed")
+        with btn_col:
+            if st.button("🔍 Scan Now", use_container_width=True, key="radar_scan"):
+                with st.spinner("Scanning for trends..."):
+                    new_trends = ihub.fetch_trends_via_ai(radar_kw)
+                if new_trends:
+                    st.success(f"Found {len(new_trends)} new trends!")
+                else:
+                    st.warning("No new trends found – try different keywords.")
+                st.rerun()
+
+        # Manual add
+        with st.expander("➕ Add trend manually"):
+            t_headline = st.text_input("Headline", key="trend_h")
+            t_source   = st.text_input("Source / Publication", key="trend_src")
+            t_summary  = st.text_area("Summary (2 sentences)", key="trend_sum", height=70)
+            if st.button("Add Trend", key="trend_add"):
+                if t_headline:
+                    ihub.add_trend(t_headline, t_source, summary=t_summary)
+                    st.toast("Trend added!")
+                    st.rerun()
+
+        trends = ihub.get_trends()
+        if not trends:
+            st.info("No trends yet — click 'Scan Now' to fetch AI-generated industry signals.")
+        for tr in reversed(trends):
+            with st.container(border=True):
+                c1, c2 = st.columns([5, 1])
+                with c1:
+                    st.markdown(f"**{tr['headline']}**")
+                    if tr.get("source"):
+                        st.caption(f"📰 {tr['source']} · {tr['added_at']}")
+                    if tr.get("summary"):
+                        st.markdown(f"<div style='color:#64748b; font-size:0.84rem;'>{tr['summary']}</div>",
+                                    unsafe_allow_html=True)
+                with c2:
+                    if st.button("🗑️", key=f"del_trend_{tr['id']}", help="Delete"):
+                        ihub.delete_trend(tr["id"])
+                        st.rerun()
+                    status_icon = "✅" if tr.get("used") else "🆕"
+                    st.caption(status_icon)
+
+    # ── My Observations ───────────────────────────────────────────────────────
+    with ih_tab2:
+        st.markdown("#### ✍️ My Observations")
+        st.caption("Log a daily spark — a customer conversation, factory visit insight, or random thought that could become a post.")
+
+        with st.container(border=True):
+            spark_text = st.text_area("What's on your mind today?", height=100, key="spark_input",
+                                      placeholder="e.g. 'Visited a factory where they still use manual optical checks for BGA components...'")
+            spark_tags_raw = st.text_input("Tags (comma-separated)", key="spark_tags",
+                                           placeholder="e.g. quality, BGA, customer story")
+            if st.button("Log Observation", type="primary", key="spark_add"):
+                if spark_text.strip():
+                    tags = [t.strip() for t in spark_tags_raw.split(",") if t.strip()]
+                    ihub.add_spark(spark_text, tags)
+                    st.toast("✅ Observation logged!")
+                    st.rerun()
+
+        sparks = ihub.get_sparks()
+        if not sparks:
+            st.info("Nothing logged yet — capture your first observation above.")
+        for sp in reversed(sparks):
+            with st.container(border=True):
+                c1, c2 = st.columns([5, 1])
+                with c1:
+                    st.markdown(f"<div style='font-size:0.9rem;'>{sp['text']}</div>", unsafe_allow_html=True)
+                    if sp.get("tags"):
+                        tags_html = " ".join(
+                            f"<span style='background:#e0f2fe; color:#0369a1; border-radius:999px; padding:1px 8px; font-size:0.72rem;'>{t}</span>"
+                            for t in sp["tags"]
+                        )
+                        st.markdown(tags_html, unsafe_allow_html=True)
+                    st.caption(f"🕐 {sp['added_at']}")
+                with c2:
+                    if st.button("🗑️", key=f"del_spark_{sp['id']}", help="Delete"):
+                        ihub.delete_spark(sp["id"])
+                        st.rerun()
+
+    # ── Q&A Database ──────────────────────────────────────────────────────────
+    with ih_tab3:
+        st.markdown("#### 💬 Q&A Database")
+        st.caption("Capture great questions from LinkedIn comments, DMs, or trade show conversations. Each one is a potential post.")
+
+        with st.container(border=True):
+            qa_q = st.text_area("Question asked by your audience", height=80, key="qa_input",
+                                placeholder="e.g. 'How does your AI handle solder paste inspection on fine-pitch ICs?'")
+            qa_src = st.text_input("Source (optional)", key="qa_src",
+                                   placeholder="e.g. LinkedIn comment on post X, APEX visitor")
+            if st.button("Save to Q&A DB", type="primary", key="qa_add"):
+                if qa_q.strip():
+                    ihub.add_qa_item(qa_q, qa_src or "LinkedIn")
+                    st.toast("💬 Question saved!")
+                    st.rerun()
+
+        qa_items = ihub.get_qa_items()
+        unused = [q for q in qa_items if not q.get("used")]
+        used   = [q for q in qa_items if q.get("used")]
+
+        st.markdown(f"**{len(unused)} unanswered questions** · {len(used)} answered")
+        for qi in reversed(unused):
+            with st.container(border=True):
+                c1, c2, c3 = st.columns([5, 1, 1])
+                with c1:
+                    st.markdown(f"<div style='font-size:0.9rem; font-style:italic;'>❓ {qi['question']}</div>",
+                                unsafe_allow_html=True)
+                    st.caption(f"From: {qi['source']} · {qi['added_at']}")
+                with c2:
+                    if st.button("✓ Used", key=f"qa_used_{qi['id']}"):
+                        ihub.mark_qa_used(qi["id"])
+                        st.rerun()
+                with c3:
+                    if st.button("🗑️", key=f"qa_del_{qi['id']}"):
+                        ihub.delete_qa_item(qi["id"])
+                        st.rerun()
+
+        if used:
+            with st.expander(f"✅ {len(used)} answered questions"):
+                for qi in used:
+                    st.markdown(f"- ✅ {qi['question']} *(from {qi['source']})*")
+
+    # ── Idea Library ──────────────────────────────────────────────────────────
+    with ih_tab4:
+        st.markdown("#### 🗃️ Idea Library")
+        st.caption("Your long-form idea seeds — topics that aren't ready yet but deserve attention later.")
+
+        with st.container(border=True):
+            idea_title = st.text_input("Idea title / topic", key="idea_title",
+                                       placeholder="e.g. 'Why most factories underestimate AOI false-positive costs'")
+            idea_notes = st.text_area("Notes (optional)", key="idea_notes", height=70,
+                                      placeholder="Context, angles, related posts to reference...")
+            idea_type  = st.selectbox("Content type", LABELS, key="idea_type")
+            idea_prio  = st.select_slider("Priority", options=["High 🔥", "Medium", "Low"], value="Medium", key="idea_prio")
+            prio_map   = {"High 🔥": 1, "Medium": 2, "Low": 3}
+            if st.button("Add to Library", type="primary", key="idea_add"):
+                if idea_title.strip():
+                    type_key = LABEL_TO_KEY.get(idea_type, DEFAULT_TYPE)
+                    ihub.add_idea(idea_title, idea_notes, type_key, prio_map[idea_prio])
+                    st.toast("📚 Idea saved to library!")
+                    st.rerun()
+
+        ideas = ihub.get_ideas()
+        if not ideas:
+            st.info("No ideas yet — add your first topic above.")
+
+        # Sort by priority
+        for prio_label, prio_val in [("🔥 High Priority", 1), ("Medium Priority", 2), ("Low Priority", 3)]:
+            group = [i for i in ideas if i.get("priority") == prio_val and not i.get("promoted")]
+            if not group:
+                continue
+            st.markdown(f"**{prio_label}** ({len(group)})")
+            for idea in group:
+                with st.container(border=True):
+                    c1, c2, c3 = st.columns([5, 1, 1])
+                    with c1:
+                        st.markdown(f"**{idea['title']}**")
+                        st.markdown(badge_html(idea.get("content_type", DEFAULT_TYPE)), unsafe_allow_html=True)
+                        if idea.get("notes"):
+                            st.caption(idea["notes"])
+                        st.caption(f"Added {idea['added_at']}")
+                    with c2:
+                        if st.button("→ Plan", key=f"idea_promo_{idea['id']}", help="Promote to Planning"):
+                            ihub.promote_idea(idea["id"])
+                            st.toast(f"'{idea['title']}' marked for planning!")
+                            st.rerun()
+                    with c3:
+                        if st.button("🗑️", key=f"idea_del_{idea['id']}"):
+                            ihub.delete_idea(idea["id"])
+                            st.rerun()
