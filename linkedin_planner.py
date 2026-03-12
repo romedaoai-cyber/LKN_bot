@@ -155,8 +155,39 @@ def regenerate_single_topic(index, user_feedback=""):
     BRAINSTORM_FILE.write_text(json.dumps(topics_data, indent=2), encoding="utf-8")
     return topics_data, True, err
 
-def generate_post_content(topic, user_feedback=""):
-    """Generate a full LinkedIn post body from a topic."""
+def generate_post_content(topic, user_feedback="", use_pipeline=True):
+    """
+    Generate a full LinkedIn post body from a topic.
+    When use_pipeline=True, runs the 4-skill multi-role AI pipeline.
+    Falls back to the original single-prompt approach if pipeline fails.
+    Returns (body: str, post_type: str, pipeline_result: dict|None)
+    """
+    # ── Try multi-skill pipeline first ──────────────────────────────────────
+    if use_pipeline:
+        try:
+            import sys
+            sys.path.insert(0, str(Path(__file__).parent))
+            from modules.ai_pipeline import run_pipeline, classify_content_type
+            from modules.content_types import classify_prompt
+
+            # Pre-classify to feed the pipeline
+            post_type = classify_prompt(topic, "")
+            result = run_pipeline(
+                topic=topic,
+                post_type=post_type,
+                extra_context=user_feedback,
+                inject_data=True,
+                sharpen_pain=True,
+                generate_hooks=True,
+                check_pr=True,
+            )
+            body = result.get("body", "")
+            if len(body) >= 80:
+                return body, result.get("post_type", post_type), result
+        except Exception as e:
+            print(f"[Pipeline] Falling back to single-prompt: {e}")
+
+    # ── Fallback: original single Gemini prompt ──────────────────────────────
     api_key = get_api_key()
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel("gemini-2.0-flash")
@@ -180,16 +211,17 @@ Rules:
         response = model.generate_content(prompt)
         text = (response.text or "").strip()
         if len(text) >= 80:
-            return text
+            return text, "tutorial", None
     except Exception as e:
         print(f"Error generating full post content: {e}")
-    return f"{topic}\n\nWhat changes would this unlock in your production workflow?"
+    return f"{topic}\n\nWhat changes would this unlock in your production workflow?", "tutorial", None
 
 
-def build_post_markdown(date, topic, body):
+def build_post_markdown(date, topic, body, post_type="tutorial"):
     return f"""<!-- date: {date} -->
 <!-- status: pending -->
 <!-- subject: {topic} -->
+<!-- post_type: {post_type} -->
 <!-- image: -->
 <!-- feedback: -->
 <!-- revisions: 0 -->
@@ -206,8 +238,13 @@ def convert_to_planning(topics_to_save, user_feedback=""):
     for t in topics_to_save:
         filename = f"plan_{t['date']}_{t['id']}.md"
         filepath = POSTS_DIR / filename
-        full_body = generate_post_content(t["topic"], user_feedback=user_feedback)
-        content = build_post_markdown(t["date"], t["topic"], full_body)
+        result = generate_post_content(t["topic"], user_feedback=user_feedback)
+        # Handle both old (str) and new (tuple) return values
+        if isinstance(result, tuple):
+            full_body, post_type, _pipeline = result
+        else:
+            full_body, post_type = result, "tutorial"
+        content = build_post_markdown(t["date"], t["topic"], full_body, post_type)
         filepath.write_text(content, encoding="utf-8")
         created += 1
 

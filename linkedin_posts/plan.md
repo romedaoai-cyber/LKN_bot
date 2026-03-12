@@ -1,3 +1,7 @@
+<!-- subject: Detect all kinds of defect. -->
+<!-- status: planning -->
+<!-- feedback:  -->
+<!-- time: 16:30 -->
 # 🧠 AI-Generated Content Plan (2026-02-11)
 
 Based on your top performing content (Analyzed 20 posts), here is your strategy:
